@@ -129,10 +129,25 @@ ParseResult parse_expr (char const * lo, char const * hi) {
     }
 }
 
+#include <unordered_map>
+
+std::unordered_map<std::string, std::function<double(std::list<double>)>> fs;
+
+void setup() {
+    fs["print"] = [](auto l) {
+        for(auto v : l) {
+            std::cout << v;
+        }
+        return 0;
+    };
+}
+
 int main (int, char**) {
+    setup();
     std::cout << "hello world!" << std::endl;
     std::string x = "(print (plus 1 1))";
     char const * c = x.c_str();
     parse_expr(c, c + x.size());
+    fs["print"](std::list<double>{1337});
     return 0;
 }
