@@ -9,14 +9,15 @@
 // list = ( expr * )
 
 class Expr {
-
+public:
+    virtual ~Expr() = default;
 };
 
 template<typename T>
 class ValueHolder {
     public:
         ValueHolder(T o) : v(o) {}
-        T const & value() const { return value; }
+        T const & value() const { return v; }
     private:
         T v;
 };
@@ -33,6 +34,7 @@ class List : public Expr {
     public:
         List(std::list<std::unique_ptr<Expr>> exprs): exprs_(std::move(exprs)) {}
 
+        std::list<std::unique_ptr<Expr>> const & value() { return exprs_; }
     private:
         std::list<std::unique_ptr<Expr>> exprs_;
 };
@@ -142,12 +144,33 @@ void setup() {
     };
 }
 
+void eval(Expr *e) {
+    if(auto l = dynamic_cast<List *>(e)) {
+        if(l->value().empty()) {
+            return; // empty form
+        }
+        if(auto s = dynamic_cast<Symbol *>(l->value().front().get())) {
+            if(fs.count(s->value())) {
+                std::list<double> args;
+                for(auto const & v : l->value()) {
+                    if(auto d = dynamic_cast<Number *>(v.get())) {
+                        args.push_back(d->value());
+                    }
+                }
+                fs[s->value()](args);
+            }
+        }
+    }
+}
+
 int main (int, char**) {
     setup();
     std::cout << "hello world!" << std::endl;
-    std::string x = "(print (plus 1 1))";
+    std::string x = "(print 1 3 3 7)";
     char const * c = x.c_str();
-    parse_expr(c, c + x.size());
-    fs["print"](std::list<double>{1337});
+    ParseResult pr = parse_expr(c, c + x.size());
+    if(pr.parsed()) {
+        eval(pr.grab().get());       
+    }
     return 0;
 }
