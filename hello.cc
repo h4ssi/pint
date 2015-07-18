@@ -144,31 +144,44 @@ void setup() {
     }
     return 0;
   };
+  fs["plus"] = [](auto l) {
+    double s = 0;
+    for (auto v : l) {
+      s += v;
+    }
+    return s;
+  };
 }
 
-void eval(Expr *e) {
-  if (auto l = dynamic_cast<List *>(e)) {
+double eval(Expr *e) {
+  if (auto n = dynamic_cast<Number *>(e)) {
+    return n->value();
+  } else if (auto l = dynamic_cast<List *>(e)) {
     if (l->value().empty()) {
-      return; // empty form
+      return 0; // empty form
     }
     if (auto s = dynamic_cast<Symbol *>(l->value().front().get())) {
       if (fs.count(s->value())) {
         std::list<double> args;
+        bool first = true;
         for (auto const &v : l->value()) {
-          if (auto d = dynamic_cast<Number *>(v.get())) {
-            args.push_back(d->value());
+          if (first) {
+            first = false;
+            continue;
           }
+          args.push_back(eval(v.get()));
         }
-        fs[s->value()](args);
+        return fs[s->value()](args);
       }
     }
   }
+  return 0;
 }
 
 int main(int, char **) {
   setup();
   std::cout << "hello world!" << std::endl;
-  std::string x = "(print 1 3 3 7)";
+  std::string x = "(print 1 3 (plus 1 1 1) 7)";
   char const *c = x.c_str();
   ParseResult pr = parse_expr(c, c + x.size());
   if (pr.parsed()) {
