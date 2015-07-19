@@ -15,7 +15,8 @@ public:
 
 template <typename T> class ValueHolder {
 public:
-  ValueHolder(T o) : v(o) {}
+  ValueHolder(T const &o) : v(o) {}
+  ValueHolder(T &&o) : v(std::move(o)) {}
   T const &value() const { return v; }
 
 private:
@@ -30,14 +31,8 @@ class Symbol : public Expr, public ValueHolder<std::string> {
   using ValueHolder::ValueHolder;
 };
 
-class List : public Expr {
-public:
-  List(std::list<std::unique_ptr<Expr>> exprs) : exprs_(std::move(exprs)) {}
-
-  std::list<std::unique_ptr<Expr>> const &value() { return exprs_; }
-
-private:
-  std::list<std::unique_ptr<Expr>> exprs_;
+class List : public Expr, public ValueHolder<std::list<std::unique_ptr<Expr>>> {
+  using ValueHolder::ValueHolder;
 };
 
 class ParseResult {
