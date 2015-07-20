@@ -130,43 +130,70 @@ ParseResult parse_expr(char const *lo, char const *hi) {
 
 #include <unordered_map>
 
-std::unordered_map<std::string, std::function<double(std::list<double>)>> fs;
+class Value {
+public:
+  virtual ~Value() = default;
+};
+
+// value = double | function
+// function = arg_binding + var_context + logic
+
+// simple mode create function objects during eval
+using FunctionType = std::function<
+    std::unique_ptr<Value>(std::list<std::unique_ptr<Value>> const &)>;
+class Function : public Value, public ValueHolder<FunctionType> {
+  using ValueHolder::ValueHolder;
+};
+
+class Double : public Value, public ValueHolder<double> {
+  using ValueHolder::ValueHolder;
+};
+
+std::unordered_map<std::string, std::shared_ptr<Value>> root;
 
 void setup() {
-  fs["print"] = [](auto l) {
-    for (auto v : l) {
-      std::cout << v;
+  root["print"] = std::make_shared<Function>([](auto const &l) {
+    for (auto const &v : l) {
+      if (Double *d = dynamic_cast<Double *>(v.get())) {
+        std::cout << d->value();
+      } else {
+        std::cout << "[Function]";
+      }
     }
-    return 0;
-  };
-  fs["plus"] = [](auto l) {
+    return std::make_unique<Double>(0);
+  });
+  root["plus"] = std::make_shared<Function>([](auto const &l) {
     double s = 0;
-    for (auto v : l) {
-      s += v;
+    for (auto const &v : l) {
+      if (Double *d = dynamic_cast<Double *>(v.get())) {
+        s += d->value();
+      }
     }
-    return s;
-  };
+    return std::make_unique<Double>(s);
+  });
 }
 
-double eval(Expr *e) {
+std::unique_ptr<Value> eval(Expr *e) {
   if (auto n = dynamic_cast<Number *>(e)) {
-    return n->value();
+    return std::make_unique<Double>(n->value());
   } else if (auto l = dynamic_cast<List *>(e)) {
     if (l->value().empty()) {
-      return 0; // empty form
+      return std::make_unique<Double>(0); // empty form
     }
     if (auto s = dynamic_cast<Symbol *>(l->value().front().get())) {
-      if (fs.count(s->value())) {
-        std::list<double> args;
-        bool first = true;
-        for (auto const &v : l->value()) {
-          if (first) {
-            first = false;
-            continue;
+      if (root.count(s->value())) {
+        if (Function *f = dynamic_cast<Function *>(root[s->value()].get())) {
+          std::list<std::unique_ptr<Value>> args;
+          bool first = true;
+          for (auto const &v : l->value()) {
+            if (first) {
+              first = false;
+              continue;
+            }
+            args.emplace_back(eval(v.get()));
           }
-          args.push_back(eval(v.get()));
+          return (f->value())(args);
         }
-        return fs[s->value()](args);
       }
     }
   }
