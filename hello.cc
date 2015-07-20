@@ -41,7 +41,7 @@ public:
       : expr_(std::move(expr)), pos_(pos) {}
   char const *pos() const { return pos_; }
   bool parsed() const { return expr_ != nullptr; }
-  std::unique_ptr<Expr> grab() { return std::move(expr_); }
+  std::unique_ptr<Expr> &result() { return expr_; }
 
 private:
   std::unique_ptr<Expr> expr_;
@@ -97,7 +97,7 @@ ParseResult parse_list(char const *lo, char const *hi) {
       std::cout << "." << std::endl;
 
       c = r.pos();
-      l.emplace_back(r.grab());
+      l.emplace_back(std::move(r.result()));
 
       continue;
     }
@@ -180,7 +180,7 @@ int main(int, char **) {
   char const *c = x.c_str();
   ParseResult pr = parse_expr(c, c + x.size());
   if (pr.parsed()) {
-    eval(pr.grab().get());
+    eval(pr.result().get());
   }
   return 0;
 }
