@@ -140,7 +140,7 @@ public:
 
 // simple mode create function objects during eval
 using FunctionType = std::function<
-    std::unique_ptr<Value>(std::list<std::unique_ptr<Value>> const &)>;
+    std::shared_ptr<Value>(std::list<std::shared_ptr<Value>> const &)>;
 class Function : public Value, public ValueHolder<FunctionType> {
   using ValueHolder::ValueHolder;
 };
@@ -160,7 +160,7 @@ void setup() {
         std::cout << "[Function]";
       }
     }
-    return std::make_unique<Double>(0);
+    return std::make_shared<Double>(0);
   });
   root["plus"] = std::make_shared<Function>([](auto const &l) {
     double s = 0;
@@ -169,21 +169,23 @@ void setup() {
         s += d->value();
       }
     }
-    return std::make_unique<Double>(s);
+    return std::make_shared<Double>(s);
   });
 }
 
-std::unique_ptr<Value> eval(Expr *e) {
+std::shared_ptr<Value> eval(Expr *e) {
   if (auto n = dynamic_cast<Number *>(e)) {
     return std::make_unique<Double>(n->value());
+  } else if (auto var = dynamic_cast<Symbol *>(e)) {
+    return root[var->value()];
   } else if (auto l = dynamic_cast<List *>(e)) {
     if (l->value().empty()) {
-      return std::make_unique<Double>(0); // empty form
+      return std::make_shared<Double>(0); // empty form
     }
     if (auto s = dynamic_cast<Symbol *>(l->value().front().get())) {
       if ("do" == s->value()) {
         bool first = true;
-        std::unique_ptr<Value> r;
+        std::shared_ptr<Value> r;
         for (auto const &e : l->value()) {
           if (first) {
             first = false;
@@ -193,9 +195,24 @@ std::unique_ptr<Value> eval(Expr *e) {
         }
         return r;
       }
+      if ("def" == s->value()) {
+        auto i = std::begin(l->value());
+        if (i != std::end(l->value())) {
+          ++i;
+          if (i != std::end(l->value())) {
+            if (auto t = dynamic_cast<Symbol *>(i->get())) {
+              ++i;
+              if (i != std::end(l->value())) {
+                return (root[t->value()] = eval(i->get()));
+              }
+            }
+          }
+        }
+        return std::make_shared<Double>(0);
+      }
       if (root.count(s->value())) {
         if (Function *f = dynamic_cast<Function *>(root[s->value()].get())) {
-          std::list<std::unique_ptr<Value>> args;
+          std::list<std::shared_ptr<Value>> args;
           bool first = true;
           for (auto const &v : l->value()) {
             if (first) {
@@ -215,7 +232,7 @@ std::unique_ptr<Value> eval(Expr *e) {
 int main(int, char **) {
   setup();
   std::cout << "hello world!" << std::endl;
-  std::string x = "(do (print 1 3 (plus 1 1 1)) (print 7))";
+  std::string x = "(do (print 1 3 (plus 1 1 1)) (def seven 7) (print seven))";
   char const *c = x.c_str();
   ParseResult pr = parse_expr(c, c + x.size());
   if (pr.parsed()) {
