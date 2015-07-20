@@ -181,6 +181,18 @@ std::unique_ptr<Value> eval(Expr *e) {
       return std::make_unique<Double>(0); // empty form
     }
     if (auto s = dynamic_cast<Symbol *>(l->value().front().get())) {
+      if ("do" == s->value()) {
+        bool first = true;
+        std::unique_ptr<Value> r;
+        for (auto const &e : l->value()) {
+          if (first) {
+            first = false;
+            continue;
+          }
+          r = eval(e.get());
+        }
+        return r;
+      }
       if (root.count(s->value())) {
         if (Function *f = dynamic_cast<Function *>(root[s->value()].get())) {
           std::list<std::unique_ptr<Value>> args;
@@ -203,7 +215,7 @@ std::unique_ptr<Value> eval(Expr *e) {
 int main(int, char **) {
   setup();
   std::cout << "hello world!" << std::endl;
-  std::string x = "(print 1 3 (plus 1 1 1) 7)";
+  std::string x = "(do (print 1 3 (plus 1 1 1)) (print 7))";
   char const *c = x.c_str();
   ParseResult pr = parse_expr(c, c + x.size());
   if (pr.parsed()) {
