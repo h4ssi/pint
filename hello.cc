@@ -173,6 +173,37 @@ void setup() {
   });
 }
 
+#include <unordered_set>
+
+std::unordered_set<std::string> free_vars(List *l) {
+  std::unordered_set<std::string> vars;
+
+  Symbol *s = nullptr;
+  List *args = nullptr;
+  int i = 0;
+  bool is_fn = false;
+  for (auto const &e : l->value()) {
+    if (i == 0 && (s = dynamic_cast<Symbol *>(e.get())) && "fn" == s->value()) {
+      is_fn = true;
+    } else if (is_fn && i == 1 && (args = dynamic_cast<List *>(e.get()))) {
+    } else if ((s = dynamic_cast<Symbol *>(e.get()))) {
+      vars.emplace(s->value());
+    } else if (List *il = dynamic_cast<List *>(e.get())) {
+      for (auto const &v : free_vars(il)) {
+        vars.emplace(v);
+      }
+    }
+    ++i;
+  }
+  if (args != nullptr) {
+    for (auto const &v : free_vars(args)) {
+      vars.erase(v);
+    }
+  }
+
+  return vars;
+}
+
 std::shared_ptr<Value> eval(Expr *e) {
   if (auto n = dynamic_cast<Number *>(e)) {
     return std::make_unique<Double>(n->value());
@@ -237,6 +268,14 @@ int main(int, char **) {
   ParseResult pr = parse_expr(c, c + x.size());
   if (pr.parsed()) {
     eval(pr.result().get());
+  }
+  std::string s = "(fn (a b c) a b c d (fn (d) d e))";
+  char const *d = s.c_str();
+  ParseResult pr2 = parse_expr(d, d + s.size());
+  if (pr2.parsed()) {
+    for (auto const &fv : free_vars(dynamic_cast<List *>(pr2.result().get()))) {
+      std::cout << "fv : " << fv << std::endl;
+    }
   }
   return 0;
 }
