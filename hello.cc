@@ -333,26 +333,32 @@ std::shared_ptr<Value> eval(Memory &m, Expr *e) {
   return 0;
 }
 
-int main(int, char **) {
+#include <sstream>
+#include <fstream>
+
+int main(int argc, char **argv) {
   setup();
   std::cout << "hello world!" << std::endl;
-  std::string x = R"(
-      (do
-       (print 
-        1 
-        3 
-        (plus 
-         1 
-         1 
-         ((fn (a b) 
-              ((fn (a) b) 10)) 9 1))) 
-        (def seven 7) 
-        (print seven))
-           )";
+
+  std::stringstream str;
+
+  if (argc == 2) {
+    str << std::ifstream(argv[1]).rdbuf();
+  } else {
+    str << std::cin.rdbuf();
+  }
+
+  std::string x = str.str();
   char const *c = x.c_str();
-  ParseResult pr = parse_expr(c, c + x.size());
-  if (pr.parsed()) {
-    eval(root, pr.result().get());
+  char const *e = c + x.size();
+  ParseResult pr = parse_expr(c, e);
+  std::list<std::unique_ptr<Expr>> program;
+  while (pr.parsed()) {
+    program.emplace_back(std::move(pr.result()));
+    pr = parse_expr(pr.pos(), e);
+  }
+  for (auto const &e : program) {
+    eval(root, e.get());
   }
   return 0;
 }

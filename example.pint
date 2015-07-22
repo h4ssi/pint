@@ -1,0 +1,8 @@
+
+(def hello (fn () (print 1)))
+
+(hello)
+
+(def double (fn (x) (plus x x)))
+
+(print (double (plus 1 1)))
