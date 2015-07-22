@@ -139,8 +139,8 @@ public:
 // function = arg_binding + var_context + logic
 
 // simple mode create function objects during eval
-using FunctionType = std::function<
-    std::shared_ptr<Value>(std::list<std::shared_ptr<Value>> const &)>;
+using FunctionType = std::function<std::shared_ptr<Value>(
+    std::list<std::shared_ptr<Value>> const &)>;
 class Function : public Value, public ValueHolder<FunctionType> {
   using ValueHolder::ValueHolder;
 };
@@ -205,6 +205,76 @@ std::unordered_set<std::string> free_vars(List *l) {
   return vars;
 }
 
+Memory copy_vars(Memory &m, std::unordered_set<std::string> free_vars) {
+  Memory ret;
+
+  for (auto const &v : free_vars) {
+    ret[v] = m[v];
+  }
+
+  return ret;
+}
+
+std::list<std::string> arg_list(List const *f) {
+  std::list<std::string> ret;
+
+  auto i = std::begin(f->value());
+
+  ++i;
+
+  for (auto const &a : dynamic_cast<List *>(i->get())->value()) {
+    if (Symbol *s = dynamic_cast<Symbol *>(a.get())) {
+      ret.emplace_back(s->value());
+    }
+  }
+
+  return ret;
+}
+
+std::list<Expr *> body_list(List const *f) {
+  std::list<Expr *> ret;
+
+  int i = 0;
+  for (auto const &e : f->value()) {
+    if (i >= 2) {
+      ret.emplace_back(e.get());
+    }
+
+    ++i;
+  }
+
+  return ret;
+}
+
+Memory populate(Memory m, std::list<std::string> args,
+                std::list<std::shared_ptr<Value>> const &vals) {
+  auto i = std::begin(vals);
+  for (auto const &s : args) {
+    m[s] = *i++;
+  }
+  return m;
+}
+
+std::shared_ptr<Value> eval(Memory &m, Expr *e);
+
+FunctionType eval_to_f(Memory &pm, List *f) {
+  return [
+    m(copy_vars(pm, free_vars(f))),
+    args(arg_list(f)),
+    body(body_list(f))
+  ](auto const &arg_vals) {
+    auto mm = populate(m, args, arg_vals);
+
+    std::shared_ptr<Value> r = nullptr;
+
+    for (auto const &e : body) {
+      r = eval(mm, e);
+    }
+
+    return r;
+  };
+}
+
 std::shared_ptr<Value> eval(Memory &m, Expr *e) {
   if (auto n = dynamic_cast<Number *>(e)) {
     return std::make_unique<Double>(n->value());
@@ -242,20 +312,22 @@ std::shared_ptr<Value> eval(Memory &m, Expr *e) {
         }
         return std::make_shared<Double>(0);
       }
-      if (m.count(s->value())) {
-        if (Function *f = dynamic_cast<Function *>(m[s->value()].get())) {
-          std::list<std::shared_ptr<Value>> args;
-          bool first = true;
-          for (auto const &v : l->value()) {
-            if (first) {
-              first = false;
-              continue;
-            }
-            args.emplace_back(eval(m, v.get()));
-          }
-          return (f->value())(args);
-        }
+      if ("fn" == s->value()) {
+        return std::make_shared<Function>(eval_to_f(m, l));
       }
+    }
+    if (std::shared_ptr<Function> f = std::dynamic_pointer_cast<Function>(
+            eval(m, l->value().front().get()))) {
+      std::list<std::shared_ptr<Value>> args;
+      bool first = true;
+      for (auto const &v : l->value()) {
+        if (first) {
+          first = false;
+          continue;
+        }
+        args.emplace_back(eval(m, v.get()));
+      }
+      return (f->value())(args);
     }
   }
   return 0;
@@ -264,19 +336,23 @@ std::shared_ptr<Value> eval(Memory &m, Expr *e) {
 int main(int, char **) {
   setup();
   std::cout << "hello world!" << std::endl;
-  std::string x = "(do (print 1 3 (plus 1 1 1)) (def seven 7) (print seven))";
+  std::string x = R"(
+      (do
+       (print 
+        1 
+        3 
+        (plus 
+         1 
+         1 
+         ((fn (a b) 
+              ((fn (a) b) 10)) 9 1))) 
+        (def seven 7) 
+        (print seven))
+           )";
   char const *c = x.c_str();
   ParseResult pr = parse_expr(c, c + x.size());
   if (pr.parsed()) {
     eval(root, pr.result().get());
-  }
-  std::string s = "(fn (a b c) a b c d (fn (d) d e))";
-  char const *d = s.c_str();
-  ParseResult pr2 = parse_expr(d, d + s.size());
-  if (pr2.parsed()) {
-    for (auto const &fv : free_vars(dynamic_cast<List *>(pr2.result().get()))) {
-      std::cout << "fv : " << fv << std::endl;
-    }
   }
   return 0;
 }
