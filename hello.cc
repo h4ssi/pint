@@ -149,7 +149,8 @@ class Double : public Value, public ValueHolder<double> {
   using ValueHolder::ValueHolder;
 };
 
-std::unordered_map<std::string, std::shared_ptr<Value>> root;
+using Memory = std::unordered_map<std::string, std::shared_ptr<Value>>;
+Memory root;
 
 void setup() {
   root["print"] = std::make_shared<Function>([](auto const &l) {
@@ -204,11 +205,11 @@ std::unordered_set<std::string> free_vars(List *l) {
   return vars;
 }
 
-std::shared_ptr<Value> eval(Expr *e) {
+std::shared_ptr<Value> eval(Memory &m, Expr *e) {
   if (auto n = dynamic_cast<Number *>(e)) {
     return std::make_unique<Double>(n->value());
   } else if (auto var = dynamic_cast<Symbol *>(e)) {
-    return root[var->value()];
+    return m[var->value()];
   } else if (auto l = dynamic_cast<List *>(e)) {
     if (l->value().empty()) {
       return std::make_shared<Double>(0); // empty form
@@ -222,7 +223,7 @@ std::shared_ptr<Value> eval(Expr *e) {
             first = false;
             continue;
           }
-          r = eval(e.get());
+          r = eval(m, e.get());
         }
         return r;
       }
@@ -234,15 +235,15 @@ std::shared_ptr<Value> eval(Expr *e) {
             if (auto t = dynamic_cast<Symbol *>(i->get())) {
               ++i;
               if (i != std::end(l->value())) {
-                return (root[t->value()] = eval(i->get()));
+                return (m[t->value()] = eval(m, i->get()));
               }
             }
           }
         }
         return std::make_shared<Double>(0);
       }
-      if (root.count(s->value())) {
-        if (Function *f = dynamic_cast<Function *>(root[s->value()].get())) {
+      if (m.count(s->value())) {
+        if (Function *f = dynamic_cast<Function *>(m[s->value()].get())) {
           std::list<std::shared_ptr<Value>> args;
           bool first = true;
           for (auto const &v : l->value()) {
@@ -250,7 +251,7 @@ std::shared_ptr<Value> eval(Expr *e) {
               first = false;
               continue;
             }
-            args.emplace_back(eval(v.get()));
+            args.emplace_back(eval(m, v.get()));
           }
           return (f->value())(args);
         }
@@ -267,7 +268,7 @@ int main(int, char **) {
   char const *c = x.c_str();
   ParseResult pr = parse_expr(c, c + x.size());
   if (pr.parsed()) {
-    eval(pr.result().get());
+    eval(root, pr.result().get());
   }
   std::string s = "(fn (a b c) a b c d (fn (d) d e))";
   char const *d = s.c_str();
