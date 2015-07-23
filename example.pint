@@ -6,3 +6,10 @@
 (def double (fn (x) (plus x x)))
 
 (print (double (plus 1 1)))
+
+(def rec (fn (limit rr)
+           (if (eq limit 0)
+             0
+             (plus limit (rr (plus limit (minus 1)))))))
+
+(print (rec 5 rec))

@@ -172,6 +172,30 @@ void setup() {
     }
     return std::make_shared<Double>(s);
   });
+  root["minus"] = std::make_shared<Function>([](auto const &l) {
+    double s = 0;
+    for (auto const &v : l) {
+      if (Double *d = dynamic_cast<Double *>(v.get())) {
+        s -= d->value();
+      }
+    }
+    return std::make_shared<Double>(s);
+  });
+  root["eq"] = std::make_shared<Function>([](auto const &l) {
+    bool first = true;
+    double p;
+    for (auto const &v : l) {
+      if (Double *d = dynamic_cast<Double *>(v.get())) {
+        double c = d->value();
+        if (!first && p != c) {
+          return std::make_shared<Double>(0);
+        }
+        first = false;
+        p = c;
+      }
+    }
+    return std::make_shared<Double>(1);
+  });
 }
 
 #include <unordered_set>
@@ -314,6 +338,26 @@ std::shared_ptr<Value> eval(Memory &m, Expr *e) {
       }
       if ("fn" == s->value()) {
         return std::make_shared<Function>(eval_to_f(m, l));
+      }
+      if ("if" == s->value()) {
+        auto i = std::begin(l->value());
+        auto end = std::end(l->value());
+        if (++i != end) {
+          auto cond = eval(m, i++->get());
+          if (i != end) {
+            if (cond != nullptr) {
+              auto dbl = std::dynamic_pointer_cast<Double>(cond);
+              if (dbl->value() != 0) {
+                return eval(m, i->get());
+              } else {
+                if (++i != end) {
+                  return eval(m, i->get());
+                }
+              }
+            }
+          }
+        }
+        return std::make_shared<Double>(0);
       }
     }
     if (std::shared_ptr<Function> f = std::dynamic_pointer_cast<Function>(
