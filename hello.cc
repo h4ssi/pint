@@ -135,7 +135,7 @@ public:
   virtual ~Value() = default;
 };
 
-// value = double | function
+// value = double | function | symbol-value
 // function = arg_binding + var_context + logic
 
 // simple mode create function objects during eval
@@ -149,6 +149,11 @@ class Double : public Value, public ValueHolder<double> {
   using ValueHolder::ValueHolder;
 };
 
+class SymbolValue : public Value, public ValueHolder<std::string> {
+  using ValueHolder::ValueHolder;
+};
+// i think this should be merged with expr :)
+
 using Memory = std::unordered_map<std::string, std::shared_ptr<Value>>;
 Memory root;
 
@@ -157,6 +162,8 @@ void setup() {
     for (auto const &v : l) {
       if (Double *d = dynamic_cast<Double *>(v.get())) {
         std::cout << d->value();
+      } else if (SymbolValue *s = dynamic_cast<SymbolValue *>(v.get())) {
+        std::cout << "[Symbol " << s->value() << "]";
       } else {
         std::cout << "[Function]";
       }
@@ -355,6 +362,15 @@ std::shared_ptr<Value> eval(Memory &m, Expr *e) {
                 }
               }
             }
+          }
+        }
+        return std::make_shared<Double>(0);
+      }
+      if ("quote" == s->value()) {
+        auto i = std::begin(l->value());
+        if (++i != std::end(l->value())) {
+          if (Symbol *sym = dynamic_cast<Symbol *>(i->get())) {
+            return std::make_shared<SymbolValue>(sym->value());
           }
         }
         return std::make_shared<Double>(0);
