@@ -22,13 +22,19 @@
 #include <memory>
 #include <locale>
 
-// expr = list | number | symb
-// list = ( expr * )
+// value = programmatic value
+//       = expr (everything that is code)
+//       | function (concrete function value)
 
-class Expr {
+class Value {
 public:
-  virtual ~Expr() = default;
+  virtual ~Value() = default;
 };
+
+// expr = list | number | symbol
+// list = ( expr * ) // todo should be "value *"
+
+class Expr : public Value {};
 
 template <typename T> class ValueHolder {
 public:
@@ -147,12 +153,6 @@ ParseResult parse_expr(char const *lo, char const *hi) {
 
 #include <unordered_map>
 
-class Value {
-public:
-  virtual ~Value() = default;
-};
-
-// value = double | function | symbol-value
 // function = arg_binding + var_context + logic
 
 // simple mode create function objects during eval
@@ -162,63 +162,54 @@ class Function : public Value, public ValueHolder<FunctionType> {
   using ValueHolder::ValueHolder;
 };
 
-class Double : public Value, public ValueHolder<double> {
-  using ValueHolder::ValueHolder;
-};
-
-class SymbolValue : public Value, public ValueHolder<std::string> {
-  using ValueHolder::ValueHolder;
-};
-// i think this should be merged with expr :)
-
 using Memory = std::unordered_map<std::string, std::shared_ptr<Value>>;
 Memory root;
 
 void setup() {
   root["print"] = std::make_shared<Function>([](auto const &l) {
     for (auto const &v : l) {
-      if (Double *d = dynamic_cast<Double *>(v.get())) {
+      if (Number *d = dynamic_cast<Number *>(v.get())) {
         std::cout << d->value();
-      } else if (SymbolValue *s = dynamic_cast<SymbolValue *>(v.get())) {
+      } else if (Symbol *s = dynamic_cast<Symbol *>(v.get())) {
         std::cout << "[Symbol " << s->value() << "]";
       } else {
         std::cout << "[Function]";
       }
     }
-    return std::make_shared<Double>(0);
+    return std::make_shared<Number>(0);
   });
   root["plus"] = std::make_shared<Function>([](auto const &l) {
     double s = 0;
     for (auto const &v : l) {
-      if (Double *d = dynamic_cast<Double *>(v.get())) {
+      if (Number *d = dynamic_cast<Number *>(v.get())) {
         s += d->value();
       }
     }
-    return std::make_shared<Double>(s);
+    return std::make_shared<Number>(s);
   });
   root["minus"] = std::make_shared<Function>([](auto const &l) {
     double s = 0;
     for (auto const &v : l) {
-      if (Double *d = dynamic_cast<Double *>(v.get())) {
+      if (Number *d = dynamic_cast<Number *>(v.get())) {
         s -= d->value();
       }
     }
-    return std::make_shared<Double>(s);
+    return std::make_shared<Number>(s);
   });
   root["eq"] = std::make_shared<Function>([](auto const &l) {
     bool first = true;
     double p;
     for (auto const &v : l) {
-      if (Double *d = dynamic_cast<Double *>(v.get())) {
+      if (Number *d = dynamic_cast<Number *>(v.get())) {
         double c = d->value();
         if (!first && p != c) {
-          return std::make_shared<Double>(0);
+          return std::make_shared<Number>(0);
         }
         first = false;
         p = c;
       }
     }
-    return std::make_shared<Double>(1);
+    return std::make_shared<Number>(1);
   });
 }
 
@@ -325,12 +316,12 @@ FunctionType eval_to_f(Memory &pm, List *f) {
 
 std::shared_ptr<Value> eval(Memory &m, Expr *e) {
   if (auto n = dynamic_cast<Number *>(e)) {
-    return std::make_unique<Double>(n->value());
+    return std::make_shared<Number>(*n);
   } else if (auto var = dynamic_cast<Symbol *>(e)) {
     return m[var->value()];
   } else if (auto l = dynamic_cast<List *>(e)) {
     if (l->value().empty()) {
-      return std::make_shared<Double>(0); // empty form
+      return std::make_shared<Number>(0); // empty form
     }
     if (auto s = dynamic_cast<Symbol *>(l->value().front().get())) {
       if ("do" == s->value()) {
@@ -358,7 +349,7 @@ std::shared_ptr<Value> eval(Memory &m, Expr *e) {
             }
           }
         }
-        return std::make_shared<Double>(0);
+        return std::make_shared<Number>(0);
       }
       if ("fn" == s->value()) {
         return std::make_shared<Function>(eval_to_f(m, l));
@@ -370,7 +361,7 @@ std::shared_ptr<Value> eval(Memory &m, Expr *e) {
           auto cond = eval(m, i++->get());
           if (i != end) {
             if (cond != nullptr) {
-              auto dbl = std::dynamic_pointer_cast<Double>(cond);
+              auto dbl = std::dynamic_pointer_cast<Number>(cond);
               if (dbl->value() != 0) {
                 return eval(m, i->get());
               } else {
@@ -381,16 +372,16 @@ std::shared_ptr<Value> eval(Memory &m, Expr *e) {
             }
           }
         }
-        return std::make_shared<Double>(0);
+        return std::make_shared<Number>(0);
       }
       if ("quote" == s->value()) {
         auto i = std::begin(l->value());
         if (++i != std::end(l->value())) {
           if (Symbol *sym = dynamic_cast<Symbol *>(i->get())) {
-            return std::make_shared<SymbolValue>(sym->value());
+            return std::make_shared<Symbol>(*sym);
           }
         }
-        return std::make_shared<Double>(0);
+        return std::make_shared<Number>(0);
       }
     }
     if (std::shared_ptr<Function> f = std::dynamic_pointer_cast<Function>(
