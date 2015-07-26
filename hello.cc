@@ -54,20 +54,20 @@ class Symbol : public Expr, public ValueHolder<std::string> {
   using ValueHolder::ValueHolder;
 };
 
-class List : public Expr, public ValueHolder<std::list<std::unique_ptr<Expr>>> {
+class List : public Expr, public ValueHolder<std::list<std::shared_ptr<Expr>>> {
   using ValueHolder::ValueHolder;
 };
 
 class ParseResult {
 public:
-  ParseResult(std::unique_ptr<Expr> expr, char const *pos)
+  ParseResult(std::shared_ptr<Expr> expr, char const *pos)
       : expr_(std::move(expr)), pos_(pos) {}
   char const *pos() const { return pos_; }
   bool parsed() const { return expr_ != nullptr; }
-  std::unique_ptr<Expr> &result() { return expr_; }
+  std::shared_ptr<Expr> &result() { return expr_; }
 
 private:
-  std::unique_ptr<Expr> expr_;
+  std::shared_ptr<Expr> expr_;
   char const *pos_;
 };
 
@@ -82,7 +82,7 @@ ParseResult parse_symbol(char const *lo, char const *hi) {
 
   std::cout << s << std::endl;
 
-  return ParseResult(std::make_unique<Symbol>(s), f);
+  return ParseResult(std::make_shared<Symbol>(s), f);
 }
 
 ParseResult parse_number(char const *lo, char const *hi) {
@@ -104,11 +104,12 @@ ParseResult parse_number(char const *lo, char const *hi) {
 
   std::cout << num << std::endl;
 
-  return ParseResult(std::make_unique<Number>(num), f);
+  return ParseResult(std::make_shared<Number>(num), f);
 }
 
+// todo: shared ptr correct choice?
 ParseResult parse_list(char const *lo, char const *hi) {
-  std::list<std::unique_ptr<Expr>> l;
+  std::list<std::shared_ptr<Expr>> l;
 
   std::cout << "(" << std::endl;
 
@@ -131,7 +132,7 @@ ParseResult parse_list(char const *lo, char const *hi) {
 
     std::cout << ")" << std::endl;
 
-    return ParseResult(std::make_unique<List>(std::move(l)), r.pos() + 1);
+    return ParseResult(std::make_shared<List>(std::move(l)), r.pos() + 1);
   }
 }
 
@@ -378,9 +379,7 @@ std::shared_ptr<Value> eval(Memory &m, Expr *e) {
       }
       if ("quote" == s->value()) {
         if (++i != end) {
-          if (Symbol *sym = dynamic_cast<Symbol *>(i->get())) {
-            return std::make_shared<Symbol>(*sym);
-          }
+          return *i;
         }
         return std::make_shared<Number>(0);
       }
@@ -416,7 +415,7 @@ int main(int argc, char **argv) {
   char const *c = x.c_str();
   char const *e = c + x.size();
   ParseResult pr = parse_expr(c, e);
-  std::list<std::unique_ptr<Expr>> program;
+  std::list<std::shared_ptr<Expr>> program;
   while (pr.parsed()) {
     program.emplace_back(std::move(pr.result()));
     pr = parse_expr(pr.pos(), e);
