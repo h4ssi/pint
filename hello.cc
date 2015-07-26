@@ -284,13 +284,13 @@ std::list<std::string> arg_list(List const *f) {
   return ret;
 }
 
-std::list<Expr *> body_list(List const *f) {
-  std::list<Expr *> ret;
+std::list<std::shared_ptr<Expr>> body_list(List const *f) {
+  std::list<std::shared_ptr<Expr>> ret;
 
   int i = 0;
   for (auto const &e : f->value()) {
     if (i >= 2) {
-      ret.emplace_back(e.get());
+      ret.emplace_back(e);
     }
 
     ++i;
@@ -308,7 +308,7 @@ Memory populate(Memory m, std::list<std::string> args,
   return m;
 }
 
-std::shared_ptr<Value> eval(Memory &m, Expr *e);
+std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Expr> e);
 
 FunctionType eval_to_f(Memory &pm, List *f) {
   return [
@@ -328,12 +328,10 @@ FunctionType eval_to_f(Memory &pm, List *f) {
   };
 }
 
-std::shared_ptr<Value> eval(Memory &m, Expr *e) {
-  if (auto n = dynamic_cast<Number *>(e)) {
-    return std::make_shared<Number>(*n);
-  } else if (auto var = dynamic_cast<Symbol *>(e)) {
+std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Expr> e) {
+  if (auto var = dynamic_cast<Symbol *>(e.get())) {
     return m[var->value()];
-  } else if (auto l = dynamic_cast<List *>(e)) {
+  } else if (auto l = dynamic_cast<List *>(e.get())) {
     if (l->value().empty()) {
       return std::make_shared<Number>(0); // empty form
     }
@@ -344,7 +342,7 @@ std::shared_ptr<Value> eval(Memory &m, Expr *e) {
       if ("do" == s->value()) {
         std::shared_ptr<Value> r;
         while (++i != end) {
-          r = eval(m, i->get());
+          r = eval(m, *i);
         }
         return r;
       }
@@ -352,7 +350,7 @@ std::shared_ptr<Value> eval(Memory &m, Expr *e) {
         if (++i != end) {
           if (auto t = dynamic_cast<Symbol *>(i->get())) {
             if (++i != end) {
-              return (m[t->value()] = eval(m, i->get()));
+              return (m[t->value()] = eval(m, *i));
             }
           }
         }
@@ -363,15 +361,15 @@ std::shared_ptr<Value> eval(Memory &m, Expr *e) {
       }
       if ("if" == s->value()) {
         if (++i != end) {
-          auto cond = eval(m, i->get());
+          auto cond = eval(m, *i);
           if (++i != end) {
             if (cond != nullptr) {
-              auto num = std::dynamic_pointer_cast<Number>(cond);
+              auto num = dynamic_cast<Number *>(cond.get());
               if (num->value() != 0) {
-                return eval(m, i->get());
+                return eval(m, *i);
               } else {
                 if (++i != end) {
-                  return eval(m, i->get());
+                  return eval(m, *i);
                 }
               }
             }
@@ -386,16 +384,18 @@ std::shared_ptr<Value> eval(Memory &m, Expr *e) {
         return std::make_shared<Number>(0);
       }
     }
-    if (std::shared_ptr<Function> f =
-            std::dynamic_pointer_cast<Function>(eval(m, i->get()))) {
+    auto head = eval(m, *i);
+    if (Function *f = dynamic_cast<Function *>(head.get())) {
       std::list<std::shared_ptr<Value>> args;
       while (++i != end) {
-        args.emplace_back(eval(m, i->get()));
+        args.emplace_back(eval(m, *i));
       }
       return (f->value())(args);
     }
+    return nullptr;
+  } else {
+    return e;
   }
-  return 0;
 }
 
 #include <sstream>
@@ -421,7 +421,7 @@ int main(int argc, char **argv) {
     pr = parse_expr(x, pr.pos());
   }
   for (auto const &e : program) {
-    eval(root, e.get());
+    eval(root, e);
   }
   return 0;
 }
