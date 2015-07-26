@@ -1,4 +1,6 @@
 
+(print 'hello world!');
+
 (def hello (fn () (print 1)))
 
 (hello)
@@ -17,3 +19,6 @@
 (print (fn () 1))
 
 (print (quote a) (quote 1337) (quote (a 1 c)))
+
+(print 'over \'n out')
+(print '\\./\'\\./\'\\./\'\\')

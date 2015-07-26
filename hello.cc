@@ -30,7 +30,7 @@ public:
   virtual ~Value() = default;
 };
 
-// expr = list | number | symbol
+// expr = list | number | text | symbol
 // list = ( expr * ) // todo should be "value *"
 
 class Expr : public Value {};
@@ -46,6 +46,10 @@ private:
 };
 
 class Number : public Expr, public ValueHolder<double> {
+  using ValueHolder::ValueHolder;
+};
+
+class Text : public Expr, public ValueHolder<std::string> {
   using ValueHolder::ValueHolder;
 };
 
@@ -84,13 +88,38 @@ std::size_t len(std::size_t start, std::size_t end) {
 }
 
 ParseResult parse_symbol(std::string const &s, std::size_t pos) {
-  auto f = s.find_first_of(whitespace + "()", pos);
+  auto f = s.find_first_of(whitespace + "()'", pos);
 
   std::string sym(s, pos, len(pos, f));
 
   std::cout << sym << std::endl;
 
   return ParseResult(sym.length() ? std::make_shared<Symbol>(sym) : nullptr, f);
+}
+
+ParseResult parse_string(std::string const &s, std::size_t pos) {
+  ++pos;
+  std::string ret;
+  while (true) {
+    auto f = s.find_first_of("'\\", pos);
+
+    ret += std::string(s, pos, len(pos, f));
+
+    if (s[f] == '\\') {
+      if (++f < s.size()) { // copy next char as is
+        ret += s[f];
+      }
+      pos = ++f; // skip behind escape
+      continue;
+    }
+
+    if (s[f] == '\'') {
+      std::cout << "'" << ret << "'" << std::endl;
+      return ParseResult(std::make_shared<Text>(ret), ++f);
+    }
+
+    return ParseResult(nullptr, pos);
+  }
 }
 
 ParseResult parse_number(std::string const &s, std::size_t pos) {
@@ -145,6 +174,8 @@ ParseResult parse_expr(std::string const &s, std::size_t pos) {
     return ParseResult(nullptr, pos);
   } else if (s[f] == '(') {
     return parse_list(s, f);
+  } else if (s[f] == '\'') {
+    return parse_string(s, f);
   } else if (digit.find(s[f]) != std::string::npos) {
     return parse_number(s, f);
   } else {
@@ -169,6 +200,8 @@ Memory root;
 void print(Value const *value) {
   if (auto d = dynamic_cast<Number const *>(value)) {
     std::cout << d->value();
+  } else if (auto t = dynamic_cast<Text const *>(value)) {
+    std::cout << t->value();
   } else if (auto s = dynamic_cast<Symbol const *>(value)) {
     std::cout << "[Symbol " << s->value() << "]";
   } else if (auto li = dynamic_cast<List const *>(value)) {
