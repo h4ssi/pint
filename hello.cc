@@ -323,29 +323,22 @@ std::shared_ptr<Value> eval(Memory &m, Expr *e) {
     if (l->value().empty()) {
       return std::make_shared<Number>(0); // empty form
     }
-    if (auto s = dynamic_cast<Symbol *>(l->value().front().get())) {
+    auto const &list = l->value();
+    auto i = std::begin(list);
+    auto end = std::end(list);
+    if (auto s = dynamic_cast<Symbol *>(i->get())) {
       if ("do" == s->value()) {
-        bool first = true;
         std::shared_ptr<Value> r;
-        for (auto const &e : l->value()) {
-          if (first) {
-            first = false;
-            continue;
-          }
-          r = eval(m, e.get());
+        while (++i != end) {
+          r = eval(m, i->get());
         }
         return r;
       }
       if ("def" == s->value()) {
-        auto i = std::begin(l->value());
-        if (i != std::end(l->value())) {
-          ++i;
-          if (i != std::end(l->value())) {
-            if (auto t = dynamic_cast<Symbol *>(i->get())) {
-              ++i;
-              if (i != std::end(l->value())) {
-                return (m[t->value()] = eval(m, i->get()));
-              }
+        if (++i != end) {
+          if (auto t = dynamic_cast<Symbol *>(i->get())) {
+            if (++i != end) {
+              return (m[t->value()] = eval(m, i->get()));
             }
           }
         }
@@ -355,14 +348,12 @@ std::shared_ptr<Value> eval(Memory &m, Expr *e) {
         return std::make_shared<Function>(eval_to_f(m, l));
       }
       if ("if" == s->value()) {
-        auto i = std::begin(l->value());
-        auto end = std::end(l->value());
         if (++i != end) {
-          auto cond = eval(m, i++->get());
-          if (i != end) {
+          auto cond = eval(m, i->get());
+          if (++i != end) {
             if (cond != nullptr) {
-              auto dbl = std::dynamic_pointer_cast<Number>(cond);
-              if (dbl->value() != 0) {
+              auto num = std::dynamic_pointer_cast<Number>(cond);
+              if (num->value() != 0) {
                 return eval(m, i->get());
               } else {
                 if (++i != end) {
@@ -375,8 +366,7 @@ std::shared_ptr<Value> eval(Memory &m, Expr *e) {
         return std::make_shared<Number>(0);
       }
       if ("quote" == s->value()) {
-        auto i = std::begin(l->value());
-        if (++i != std::end(l->value())) {
+        if (++i != end) {
           if (Symbol *sym = dynamic_cast<Symbol *>(i->get())) {
             return std::make_shared<Symbol>(*sym);
           }
@@ -384,16 +374,11 @@ std::shared_ptr<Value> eval(Memory &m, Expr *e) {
         return std::make_shared<Number>(0);
       }
     }
-    if (std::shared_ptr<Function> f = std::dynamic_pointer_cast<Function>(
-            eval(m, l->value().front().get()))) {
+    if (std::shared_ptr<Function> f =
+            std::dynamic_pointer_cast<Function>(eval(m, i->get()))) {
       std::list<std::shared_ptr<Value>> args;
-      bool first = true;
-      for (auto const &v : l->value()) {
-        if (first) {
-          first = false;
-          continue;
-        }
-        args.emplace_back(eval(m, v.get()));
+      while (++i != end) {
+        args.emplace_back(eval(m, i->get()));
       }
       return (f->value())(args);
     }
