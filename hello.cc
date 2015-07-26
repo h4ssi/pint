@@ -192,7 +192,7 @@ void setup() {
     }
     return std::make_shared<Number>(0);
   });
-  root["plus"] = std::make_shared<Function>([](auto const &l) {
+  root["+"] = std::make_shared<Function>([](auto const &l) {
     double s = 0;
     for (auto const &v : l) {
       if (Number *d = dynamic_cast<Number *>(v.get())) {
@@ -201,7 +201,7 @@ void setup() {
     }
     return std::make_shared<Number>(s);
   });
-  root["minus"] = std::make_shared<Function>([](auto const &l) {
+  root["-"] = std::make_shared<Function>([](auto const &l) {
     double s = 0;
     for (auto const &v : l) {
       if (Number *d = dynamic_cast<Number *>(v.get())) {
@@ -210,7 +210,7 @@ void setup() {
     }
     return std::make_shared<Number>(s);
   });
-  root["eq"] = std::make_shared<Function>([](auto const &l) {
+  root["="] = std::make_shared<Function>([](auto const &l) {
     bool first = true;
     double p;
     for (auto const &v : l) {

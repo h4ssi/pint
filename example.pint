@@ -3,14 +3,14 @@
 
 (hello)
 
-(def double (fn (x) (plus x x)))
+(def double (fn (x) (+ x x)))
 
-(print (double (plus 1 1)))
+(print (double (+ 1 1)))
 
 (def rec (fn (limit rr)
-           (if (eq limit 0)
+           (if (= limit 0)
              0
-             (plus limit (rr (plus limit (minus 1)))))))
+             (+ limit (rr (+ limit (- 1)))))))
 
 (print (rec 5 rec))
 
