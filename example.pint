@@ -10,7 +10,7 @@
 (def rec (fn (limit rr)
            (if (= limit 0)
              0
-             (+ limit (rr (+ limit (- 1)))))))
+             (+ limit (rr (+ limit (- 1)) rr)))))
 
 (print (rec 5 rec))
 
