@@ -165,16 +165,27 @@ class Function : public Value, public ValueHolder<FunctionType> {
 using Memory = std::unordered_map<std::string, std::shared_ptr<Value>>;
 Memory root;
 
+void print(Value const *value) {
+  if (auto d = dynamic_cast<Number const *>(value)) {
+    std::cout << d->value();
+  } else if (auto s = dynamic_cast<Symbol const *>(value)) {
+    std::cout << "[Symbol " << s->value() << "]";
+  } else if (auto li = dynamic_cast<List const *>(value)) {
+    std::cout << "(";
+    for (auto const &vv : li->value()) {
+      print(vv.get());
+      std::cout << " ";
+    }
+    std::cout << ")";
+  } else {
+    std::cout << "[Function]";
+  }
+}
+
 void setup() {
   root["print"] = std::make_shared<Function>([](auto const &l) {
     for (auto const &v : l) {
-      if (Number *d = dynamic_cast<Number *>(v.get())) {
-        std::cout << d->value();
-      } else if (Symbol *s = dynamic_cast<Symbol *>(v.get())) {
-        std::cout << "[Symbol " << s->value() << "]";
-      } else {
-        std::cout << "[Function]";
-      }
+      print(v.get());
     }
     return std::make_shared<Number>(0);
   });
