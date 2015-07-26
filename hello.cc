@@ -173,9 +173,11 @@ void print(Value const *value) {
     std::cout << "[Symbol " << s->value() << "]";
   } else if (auto li = dynamic_cast<List const *>(value)) {
     std::cout << "(";
+    std::string sep = "";
     for (auto const &vv : li->value()) {
+      std::cout << sep;
+      sep = " ";
       print(vv.get());
-      std::cout << " ";
     }
     std::cout << ")";
   } else {
