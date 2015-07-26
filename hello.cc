@@ -20,7 +20,6 @@
 #include <string>
 #include <list>
 #include <memory>
-#include <locale>
 
 // value = programmatic value
 //       = expr (everything that is code)
@@ -58,97 +57,98 @@ class List : public Expr, public ValueHolder<std::list<std::shared_ptr<Expr>>> {
   using ValueHolder::ValueHolder;
 };
 
+// todo: shared ptr correct choice?
 class ParseResult {
 public:
-  ParseResult(std::shared_ptr<Expr> expr, char const *pos)
-      : expr_(std::move(expr)), pos_(pos) {}
-  char const *pos() const { return pos_; }
+  ParseResult(std::shared_ptr<Expr> expr, std::size_t pos)
+      : expr_(expr), pos_(pos) {}
+  std::size_t pos() const { return pos_; }
   bool parsed() const { return expr_ != nullptr; }
-  std::shared_ptr<Expr> &result() { return expr_; }
+  std::shared_ptr<Expr> result() const { return expr_; }
 
 private:
   std::shared_ptr<Expr> expr_;
-  char const *pos_;
+  std::size_t pos_;
 };
 
-ParseResult parse_expr(char const *lo, char const *hi);
+std::string const whitespace = " \n\r\t";
+std::string const digit = "1234567890";
 
-ParseResult parse_symbol(char const *lo, char const *hi) {
-  auto &h = std::use_facet<std::ctype<char>>(std::locale::classic());
+ParseResult parse_expr(std::string const &s, std::size_t pos);
 
-  char const *f = h.scan_not(std::ctype<char>::alnum, lo, hi);
-
-  std::string s(lo, f - lo);
-
-  std::cout << s << std::endl;
-
-  return ParseResult(std::make_shared<Symbol>(s), f);
+std::size_t len(std::size_t start, std::size_t end) {
+  if (end == std::string::npos) {
+    return end;
+  }
+  return end - start;
 }
 
-ParseResult parse_number(char const *lo, char const *hi) {
-  auto &h = std::use_facet<std::ctype<char>>(std::locale::classic());
+ParseResult parse_symbol(std::string const &s, std::size_t pos) {
+  auto f = s.find_first_of(whitespace + "()", pos);
 
-  char const *f = h.scan_not(std::ctype<char>::digit, lo, hi);
+  std::string sym(s, pos, len(pos, f));
 
-  if (f != hi && *f == '.') {
-    f = h.scan_not(std::ctype<char>::digit, f + 1, hi);
+  std::cout << sym << std::endl;
+
+  return ParseResult(sym.length() ? std::make_shared<Symbol>(sym) : nullptr, f);
+}
+
+ParseResult parse_number(std::string const &s, std::size_t pos) {
+  auto f = s.find_first_not_of(digit, pos);
+
+  if (f != std::string::npos && s[f] == '.') {
+    f = s.find_first_not_of(digit, f + 1);
   }
 
-  if (!h.is(std::ctype<char>::digit, *(f - 1))) {
-    return ParseResult(nullptr, lo);
+  if (digit.find(s[f - 1]) == std::string::npos) {
+    return ParseResult(nullptr, pos);
   }
 
-  std::ios::iostate state;
-  std::string snum(lo, f - lo);
-  double num = std::stod(snum);
+  double num = std::stod(std::string(s, pos, len(pos, f)));
 
   std::cout << num << std::endl;
 
   return ParseResult(std::make_shared<Number>(num), f);
 }
 
-// todo: shared ptr correct choice?
-ParseResult parse_list(char const *lo, char const *hi) {
+ParseResult parse_list(std::string const &s, std::size_t pos) {
   std::list<std::shared_ptr<Expr>> l;
 
   std::cout << "(" << std::endl;
 
-  char const *c = lo + 1;
+  ++pos;
   while (true) {
-    ParseResult r = parse_expr(c, hi);
+    ParseResult r = parse_expr(s, pos);
 
     if (r.parsed()) {
       std::cout << "." << std::endl;
 
-      c = r.pos();
-      l.emplace_back(std::move(r.result()));
+      pos = r.pos();
+      l.emplace_back(r.result());
 
       continue;
     }
 
-    if (r.pos() == hi || *r.pos() != ')') {
+    if (r.pos() == std::string::npos || s[r.pos()] != ')') {
       return ParseResult(nullptr, r.pos());
     }
 
     std::cout << ")" << std::endl;
 
-    return ParseResult(std::make_shared<List>(std::move(l)), r.pos() + 1);
+    return ParseResult(std::make_shared<List>(l), r.pos() + 1);
   }
 }
 
-ParseResult parse_expr(char const *lo, char const *hi) {
-  auto &h = std::use_facet<std::ctype<char>>(std::locale::classic());
-  char const *f = h.scan_not(std::ctype<char>::space, lo, hi);
-  if (f == hi) {
-    return ParseResult(nullptr, hi);
-  } else if (*f == '(') {
-    return parse_list(f, hi);
-  } else if (h.is(std::ctype<char>::digit, *f)) {
-    return parse_number(f, hi);
-  } else if (h.is(std::ctype<char>::alpha, *f)) {
-    return parse_symbol(f, hi);
+ParseResult parse_expr(std::string const &s, std::size_t pos) {
+  auto f = s.find_first_not_of(whitespace, pos);
+  if (f == std::string::npos) {
+    return ParseResult(nullptr, pos);
+  } else if (s[f] == '(') {
+    return parse_list(s, f);
+  } else if (digit.find(s[f]) != std::string::npos) {
+    return parse_number(s, f);
   } else {
-    return ParseResult(nullptr, f);
+    return parse_symbol(s, f);
   }
 }
 
@@ -414,13 +414,11 @@ int main(int argc, char **argv) {
   }
 
   std::string x = str.str();
-  char const *c = x.c_str();
-  char const *e = c + x.size();
-  ParseResult pr = parse_expr(c, e);
+  ParseResult pr = parse_expr(x, 0);
   std::list<std::shared_ptr<Expr>> program;
   while (pr.parsed()) {
-    program.emplace_back(std::move(pr.result()));
-    pr = parse_expr(pr.pos(), e);
+    program.emplace_back(pr.result());
+    pr = parse_expr(x, pr.pos());
   }
   for (auto const &e : program) {
     eval(root, e.get());
