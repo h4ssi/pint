@@ -273,6 +273,18 @@ void setup() {
           return nullptr;
         }
       });
+  root["head"] =
+      std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
+        for (auto const &v : l) {
+          if (auto ll = dynamic_cast<List *>(v.get())) {
+            if (ll->value().size()) {
+              return ll->value().front();
+            }
+          }
+          break;
+        }
+        return nullptr;
+      });
   root["+"] = std::make_shared<Function>([](auto const &l) {
     double s = 0;
     for (auto const &v : l) {

@@ -31,3 +31,6 @@
 (print (cons 1 (cons 2 (cons 3 (cons 4)))))
 (print (cons 'one' (cons 2 (cons (quote three) (cons)))))
 
+(def mylist (cons 1 (cons 'two' (cons (quote three)))))
+
+(print (head mylist))
