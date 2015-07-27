@@ -213,8 +213,10 @@ void print(Value const *value) {
       print(vv.get());
     }
     std::cout << ")";
-  } else {
+  } else if (dynamic_cast<Function const *>(value)) {
     std::cout << "[Function]";
+  } else {
+    std::cout << "[nil]";
   }
 }
 
