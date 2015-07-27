@@ -227,6 +227,16 @@ void setup() {
     }
     return std::make_shared<Number>(0);
   });
+  root["symbol-name"] =
+      std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
+        for (auto const &v : l) {
+          if (auto sym = dynamic_cast<Symbol *>(v.get())) {
+            return std::make_shared<Text>(sym->value());
+          }
+          break;
+        }
+        return nullptr;
+      });
   root["+"] = std::make_shared<Function>([](auto const &l) {
     double s = 0;
     for (auto const &v : l) {

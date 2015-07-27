@@ -22,3 +22,5 @@
 
 (print 'over \'n out')
 (print '\\./\'\\./\'\\./\'\\')
+
+(print (symbol-name (quote hihi)))
