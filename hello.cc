@@ -285,6 +285,20 @@ void setup() {
         }
         return nullptr;
       });
+  root["tail"] =
+      std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
+        for (auto const &v : l) {
+          if (auto ll = dynamic_cast<List *>(v.get())) {
+            if (ll->value().size()) {
+              auto lll = ll->value();
+              lll.pop_front();
+              return std::make_shared<List>(lll);
+            }
+          }
+          break;
+        }
+        return nullptr;
+      });
   root["+"] = std::make_shared<Function>([](auto const &l) {
     double s = 0;
     for (auto const &v : l) {
