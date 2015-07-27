@@ -26,3 +26,8 @@
 (print (symbol-name (quote hihi)))
 (print (symbol 'hoho'))
 
+(print (cons))
+(print (cons 'asdf'))
+(print (cons 1 (cons 2 (cons 3 (cons 4)))))
+(print (cons 'one' (cons 2 (cons (quote three) (cons)))))
+

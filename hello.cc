@@ -248,6 +248,31 @@ void setup() {
         }
         return nullptr;
       });
+  root["cons"] =
+      std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
+        auto i = std::begin(l);
+        auto e = std::end(l);
+
+        if (i == e) {
+          return nullptr;
+        }
+
+        auto head = *i;
+
+        if (++i == e || *i == nullptr) {
+          std::list<std::shared_ptr<Value>> nl;
+          nl.emplace_front(head);
+          return std::make_shared<List>(nl);
+        }
+
+        if (auto ol = dynamic_cast<List *>(i->get())) {
+          std::list<std::shared_ptr<Value>> nl(ol->value());
+          nl.emplace_front(head);
+          return std::make_shared<List>(nl);
+        } else {
+          return nullptr;
+        }
+      });
   root["+"] = std::make_shared<Function>([](auto const &l) {
     double s = 0;
     for (auto const &v : l) {
