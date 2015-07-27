@@ -57,7 +57,8 @@ class Symbol : public Expr, public ValueHolder<std::string> {
   using ValueHolder::ValueHolder;
 };
 
-class List : public Expr, public ValueHolder<std::list<std::shared_ptr<Expr>>> {
+class List : public Expr,
+             public ValueHolder<std::list<std::shared_ptr<Value>>> {
   using ValueHolder::ValueHolder;
 };
 
@@ -141,7 +142,7 @@ ParseResult parse_number(std::string const &s, std::size_t pos) {
 }
 
 ParseResult parse_list(std::string const &s, std::size_t pos) {
-  std::list<std::shared_ptr<Expr>> l;
+  std::list<std::shared_ptr<Value>> l;
 
   std::cout << "(" << std::endl;
 
@@ -339,8 +340,8 @@ std::list<std::string> arg_list(List const *f) {
   return ret;
 }
 
-std::list<std::shared_ptr<Expr>> body_list(List const *f) {
-  std::list<std::shared_ptr<Expr>> ret;
+std::list<std::shared_ptr<Value>> body_list(List const *f) {
+  std::list<std::shared_ptr<Value>> ret;
 
   int i = 0;
   for (auto const &e : f->value()) {
@@ -363,7 +364,7 @@ Memory populate(Memory m, std::list<std::string> args,
   return m;
 }
 
-std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Expr> e);
+std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> e);
 
 FunctionType eval_to_f(Memory &pm, List *f) {
   return [
@@ -383,7 +384,7 @@ FunctionType eval_to_f(Memory &pm, List *f) {
   };
 }
 
-std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Expr> e) {
+std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> e) {
   if (auto var = dynamic_cast<Symbol *>(e.get())) {
     return m[var->value()];
   } else if (auto l = dynamic_cast<List *>(e.get())) {
