@@ -24,3 +24,5 @@
 (print '\\./\'\\./\'\\./\'\\')
 
 (print (symbol-name (quote hihi)))
+(print (symbol 'hoho'))
+
