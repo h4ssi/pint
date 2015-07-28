@@ -194,6 +194,9 @@ using FunctionType = std::function<std::shared_ptr<Value>(
 class Function : public Value, public ValueHolder<FunctionType> {
   using ValueHolder::ValueHolder;
 };
+class Macro : public Function {
+  using Function::Function;
+};
 
 using Memory = std::unordered_map<std::string, std::shared_ptr<Value>>;
 Memory root;
@@ -466,6 +469,9 @@ std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> e) {
       if ("fn" == s->value()) {
         return std::make_shared<Function>(eval_to_f(m, l));
       }
+      if ("macro" == s->value()) {
+        return std::make_shared<Macro>(eval_to_f(m, l));
+      }
       if ("if" == s->value()) {
         if (++i != end) {
           auto cond = eval(m, *i);
@@ -492,6 +498,13 @@ std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> e) {
       }
     }
     auto head = eval(m, *i);
+    if (Macro *c = dynamic_cast<Macro *>(head.get())) {
+      std::list<std::shared_ptr<Value>> args;
+      while (++i != end) {
+        args.emplace_back(*i);
+      }
+      return eval(m, (c->value())(args));
+    }
     if (Function *f = dynamic_cast<Function *>(head.get())) {
       std::list<std::shared_ptr<Value>> args;
       while (++i != end) {

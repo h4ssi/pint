@@ -37,3 +37,13 @@
 (print (tail mylist))
 (print (tail (cons 1)))
 (print (tail (cons)))
+
+(def twice (macro (cmd) 
+    (cons (quote do) 
+    (cons cmd 
+    (cons cmd)))))
+
+(def dbl '<dbl>')
+
+(twice (print dbl))
+
