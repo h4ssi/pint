@@ -201,6 +201,8 @@ class Macro : public Function {
 using Memory = std::unordered_map<std::string, std::shared_ptr<Value>>;
 Memory root;
 
+#include <sstream>
+
 void print(Value const *value) {
   if (auto d = dynamic_cast<Number const *>(value)) {
     std::cout << d->value();
@@ -224,12 +226,36 @@ void print(Value const *value) {
   }
 }
 
+std::string to_string(Value const *value) {
+  if (auto d = dynamic_cast<Number const *>(value)) {
+    std::ostringstream oss;
+    oss << d->value();
+    return oss.str();
+  } else if (auto t = dynamic_cast<Text const *>(value)) {
+    return t->value();
+  } else if (auto s = dynamic_cast<Symbol const *>(value)) {
+    return s->value();
+  } else if (auto li = dynamic_cast<List const *>(value)) {
+    std::string ret = "";
+    for (auto const &vv : li->value()) {
+      ret += to_string(vv.get());
+    }
+    return ret;
+  } else {
+    return "";
+  }
+}
+
 void setup() {
   root["print"] = std::make_shared<Function>([](auto const &l) {
     for (auto const &v : l) {
       print(v.get());
     }
     return std::make_shared<Number>(0);
+  });
+  root["str"] = std::make_shared<Function>([](auto const &l) {
+    auto ll = std::make_unique<List>(l);
+    return std::make_shared<Text>(to_string(ll.get()));
   });
   root["symbol-name"] =
       std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
@@ -518,7 +544,6 @@ std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> e) {
   }
 }
 
-#include <sstream>
 #include <fstream>
 
 int main(int argc, char **argv) {
