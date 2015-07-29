@@ -550,7 +550,7 @@ int main(int argc, char **argv) {
   setup();
   std::cout << "hello world!" << std::endl;
 
-  std::stringstream str;
+  std::ostringstream str;
 
   if (argc == 2) {
     str << std::ifstream(argv[1]).rdbuf();
