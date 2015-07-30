@@ -37,6 +37,7 @@ class Expr : public Value {};
 
 template <typename T> class ValueHolder {
 public:
+  ValueHolder() = default;
   ValueHolder(T const &o) : v(o) {}
   ValueHolder(T &&o) : v(std::move(o)) {}
   T const &value() const { return v; }
@@ -247,12 +248,13 @@ std::string to_string(Value const *value) {
 }
 
 void setup() {
-  root["print"] = std::make_shared<Function>([](auto const &l) {
-    for (auto const &v : l) {
-      print(v.get());
-    }
-    return std::make_shared<Number>(0);
-  });
+  root["print"] =
+      std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
+        for (auto const &v : l) {
+          print(v.get());
+        }
+        return nullptr;
+      });
   root["str"] = std::make_shared<Function>([](auto const &l) {
     auto ll = std::make_unique<List>(l);
     return std::make_shared<Text>(to_string(ll.get()));
@@ -346,21 +348,22 @@ void setup() {
     }
     return std::make_shared<Number>(s);
   });
-  root["="] = std::make_shared<Function>([](auto const &l) {
-    bool first = true;
-    double p;
-    for (auto const &v : l) {
-      if (Number *d = dynamic_cast<Number *>(v.get())) {
-        double c = d->value();
-        if (!first && p != c) {
-          return std::make_shared<Number>(0);
+  root["="] =
+      std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
+        bool first = true;
+        double p;
+        for (auto const &v : l) {
+          if (Number *d = dynamic_cast<Number *>(v.get())) { // todo strings
+            double c = d->value();
+            if (!first && p != c) {
+              return nullptr;
+            }
+            first = false;
+            p = c;
+          }
         }
-        first = false;
-        p = c;
-      }
-    }
-    return std::make_shared<Number>(1);
-  });
+        return std::make_shared<Number>(p);
+      });
 }
 
 #include <unordered_set>
@@ -469,7 +472,7 @@ std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> e) {
     return m[var->value()];
   } else if (auto l = dynamic_cast<List *>(e.get())) {
     if (l->value().empty()) {
-      return std::make_shared<Number>(0); // empty form
+      return std::make_shared<List>(); // empty form
     }
     auto const &list = l->value();
     auto i = std::begin(list);
@@ -490,7 +493,7 @@ std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> e) {
             }
           }
         }
-        return std::make_shared<Number>(0);
+        return nullptr;
       }
       if ("fn" == s->value()) {
         return std::make_shared<Function>(eval_to_f(m, l));
@@ -503,24 +506,19 @@ std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> e) {
           auto cond = eval(m, *i);
           if (++i != end) {
             if (cond != nullptr) {
-              auto num = dynamic_cast<Number *>(cond.get());
-              if (num->value() != 0) {
-                return eval(m, *i);
-              } else {
-                if (++i != end) {
-                  return eval(m, *i);
-                }
-              }
+              return eval(m, *i);
+            } else if (++i != end) {
+              return eval(m, *i);
             }
           }
         }
-        return std::make_shared<Number>(0);
+        return nullptr;
       }
       if ("quote" == s->value()) {
         if (++i != end) {
           return *i;
         }
-        return std::make_shared<Number>(0);
+        return nullptr;
       }
     }
     auto head = eval(m, *i);
