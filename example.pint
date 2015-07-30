@@ -5,16 +5,32 @@
 
 (hello)
 
+; do some tests, check exit code
+
+(def nil (cons))
+(def failed-tests 0)
+
+(def test (macro (cond descr)
+             (cons (quote if)
+             (cons cond
+             (cons nil
+             (cons (cons (quote do)
+                   (cons (cons (quote print) (cons descr))
+                   (cons (cons (quote def) (cons (quote failed-tests) (cons (cons (quote +) (cons (quote failed-tests) (cons 1))))))
+             )))))))))
+
+(test (= 1337 1337) 'numbers are equal')
+
 (def double (fn (x) (+ x x)))
 
-(print (double (+ 1 1)))
+(test (= (double (+ 1 1)) 4) 'double fn works')
 
 (def rec (fn (limit rr)
            (if (= limit 0)
              0
              (+ limit (rr (+ limit (- 1)) rr)))))
 
-(print (rec 5 rec))
+(test (= (rec 5 rec) 15) 'recursion works')
 
 (print (fn () 1))
 
@@ -26,17 +42,17 @@
 (print (symbol-name (quote hihi)))
 (print (symbol 'hoho'))
 
-(print (cons))
-(print (cons 'asdf'))
-(print (cons 1 (cons 2 (cons 3 (cons 4)))))
-(print (cons 'one' (cons 2 (cons (quote three) (cons)))))
+(def nil? (fn (t) (if t nil 1)))
 
-(def mylist (cons 1 (cons 'two' (cons (quote three)))))
-
-(print (head mylist))
-(print (tail mylist))
-(print (tail (cons 1)))
-(print (tail (cons)))
+(test (nil? (cons)) 'cons only results in nil')
+(test () 'empty list is not nil')
+(test (nil? (tail ())) 'tail of empty list is nil')
+(test (head (cons 'asdf')) 'cons with one arg is single elem list')
+(test (tail (cons 'asdf')) 'tail on single elem list is empty list')
+(test (nil? (tail ())) 'tail on empty list is nil')
+(test (= 1 (head (tail (tail (cons 2 (cons 2 (cons 1))))))) 'push and pop from list')
+(test (tail (tail (tail (quote (a a a))))) 'calling tails first leads to empty list')
+(test (nil? (tail (tail (tail (tail (quote a a a)))))) 'calling tails then leads to nil')
 
 (def twice (macro (cmd) 
     (cons (quote do) 
@@ -49,6 +65,6 @@
 
 (print (str 1 2 3 'a' 'b' 'c' (quote d) (quote e) (quote f)))
 
-0
+failed-tests
 
 ; this is a comment, should do nothing (print 1)
