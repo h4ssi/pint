@@ -77,7 +77,8 @@ private:
   std::size_t pos_;
 };
 
-std::string const whitespace = " \n\r\t";
+std::string const newline = "\n\r";
+std::string const whitespace = newline + " \t";
 std::string const digit = "1234567890";
 
 ParseResult parse_expr(std::string const &s, std::size_t pos);
@@ -180,6 +181,8 @@ ParseResult parse_expr(std::string const &s, std::size_t pos) {
     return parse_string(s, f);
   } else if (digit.find(s[f]) != std::string::npos) {
     return parse_number(s, f);
+  } else if (s[f] == ';') {
+    return parse_expr(s, s.find_first_of(newline, f + 1));
   } else {
     return parse_symbol(s, f);
   }
