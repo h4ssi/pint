@@ -565,8 +565,12 @@ int main(int argc, char **argv) {
     program.emplace_back(pr.result());
     pr = parse_expr(x, pr.pos());
   }
+  std::shared_ptr<Value> r = nullptr;
   for (auto const &e : program) {
-    eval(root, e);
+    r = eval(root, e);
+  }
+  if (auto n = dynamic_cast<Number *>(r.get())) {
+    return static_cast<int>(n->value());
   }
   return 0;
 }
