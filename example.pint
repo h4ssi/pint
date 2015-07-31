@@ -85,7 +85,7 @@
 
 (twice (print dbl)) ; do not print this here (print 'lel')
 
-(print (str 1 2 3 'a' 'b' 'c' (quote d) (quote e) (quote f)))
+(test (= (str 1 2 3 'a' 'b' 'c' (quote d) (quote e) (quote f)) '123abcdef') 'str concat works')
 
 (print (str 'tests: ' num-tests))
 
