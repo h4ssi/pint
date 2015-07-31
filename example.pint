@@ -54,7 +54,10 @@
 
 (print (fn () 1))
 
-(print (quote a) (quote 1337) (quote (a 1 c)))
+(test (= (quote a) (symbol 'a')) 'symbol quoting works')
+(test (= (quote 1337) 1337) 'number quoting works')
+(test (= (quote 'text') 'text') 'text quoting works')
+(test (= (quote (a 1 c)) (cons (symbol 'a') (cons 1 (cons (symbol 'c'))))) 'list quoting works')
 
 (print 'over \'n out')
 (print '\\./\'\\./\'\\./\'\\')
