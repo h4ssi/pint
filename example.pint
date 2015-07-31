@@ -9,17 +9,21 @@
 
 (def nil (cons))
 (def failed-tests 0)
+(def num-tests 0)
 
 (def not (fn (c) (if c nil '')))
 
 (def test (macro (cond descr)
+           (cons (quote do)
+           (cons (cons (quote def) (cons (quote num-tests) (cons (cons (quote +) (cons (quote num-tests) (cons 1))))))
+           (cons
              (cons (quote if)
              (cons cond
              (cons nil
              (cons (cons (quote do)
                    (cons (cons (quote print) (cons descr))
                    (cons (cons (quote def) (cons (quote failed-tests) (cons (cons (quote +) (cons (quote failed-tests) (cons 1))))))
-             )))))))))
+             ))))))))))))
 
 (test (not nil) 'negation')
 (test (not (not 1)) 'double negation')
@@ -80,6 +84,8 @@
 (twice (print dbl)) ; do not print this here (print 'lel')
 
 (print (str 1 2 3 'a' 'b' 'c' (quote d) (quote e) (quote f)))
+
+(print (str 'tests: ' num-tests))
 
 failed-tests
 
