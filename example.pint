@@ -81,9 +81,10 @@
     (cons cmd 
     (cons cmd)))))
 
-(def dbl '<dbl>')
+(def dbl 'Na')
 
-(twice (print dbl)) ; do not print this here (print 'lel')
+(twice (twice (twice (print dbl)))) ; do not print this here (print 'lel')
+(print ' Batman!')
 
 (test (= (str 1 2 3 'a' 'b' 'c' (quote d) (quote e) (quote f)) '123abcdef') 'str concat works')
 
