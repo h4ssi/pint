@@ -10,6 +10,8 @@
 (def nil (cons))
 (def failed-tests 0)
 
+(def not (fn (c) (if c nil '')))
+
 (def test (macro (cond descr)
              (cons (quote if)
              (cons cond
@@ -19,6 +21,8 @@
                    (cons (cons (quote def) (cons (quote failed-tests) (cons (cons (quote +) (cons (quote failed-tests) (cons 1))))))
              )))))))))
 
+(test (not nil) 'negation')
+(test (not (not 1)) 'double negation')
 (test (= 1337 1337) 'numbers are equal')
 
 (def double (fn (x) (+ x x)))
