@@ -62,8 +62,7 @@
 (print 'over \'n out')
 (print '\\./\'\\./\'\\./\'\\')
 
-(print (symbol-name (quote hihi)))
-(print (symbol 'hoho'))
+(test (= (symbol-name (quote hihi)) 'hihi') 'symbol-name fn works')
 
 (def nil? (fn (t) (if t nil 1)))
 
