@@ -250,6 +250,45 @@ std::string to_string(Value const *value) {
   }
 }
 
+bool eq(std::shared_ptr<Value> const &l, std::shared_ptr<Value> const &r) {
+  if (l == r) {
+    // fns are never eq
+    return !dynamic_cast<Function *>(l.get());
+  }
+
+  if (auto nl = dynamic_cast<Number *>(l.get())) {
+    if (auto nr = dynamic_cast<Number *>(r.get())) {
+      return nl->value() == nr->value();
+    }
+    return false;
+  }
+
+  if (auto tl = dynamic_cast<Text *>(l.get())) {
+    if (auto tr = dynamic_cast<Text *>(r.get())) {
+      return tl->value() == tr->value();
+    }
+    return false;
+  }
+
+  if (auto sl = dynamic_cast<Symbol *>(l.get())) {
+    if (auto sr = dynamic_cast<Symbol *>(r.get())) {
+      return sl->value() == sr->value();
+    }
+    return false;
+  }
+
+  if (auto ll = dynamic_cast<List *>(l.get())) {
+    if (auto lr = dynamic_cast<List *>(r.get())) {
+      auto const &lll = ll->value();
+      auto const &llr = lr->value();
+      return std::equal(std::begin(lll), std::end(lll), std::begin(llr),
+                        std::end(llr), eq);
+    }
+    return false;
+  }
+  return false;
+}
+
 void setup() {
   root["print"] =
       std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
@@ -353,19 +392,14 @@ void setup() {
   });
   root["="] =
       std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
-        bool first = true;
-        double p;
+        std::shared_ptr<Value> const *p = nullptr;
         for (auto const &v : l) {
-          if (Number *d = dynamic_cast<Number *>(v.get())) { // todo strings
-            double c = d->value();
-            if (!first && p != c) {
-              return nullptr;
-            }
-            first = false;
-            p = c;
+          if (p && !eq(*p, v)) {
+            return nullptr;
           }
+          p = &v;
         }
-        return std::make_shared<Number>(p);
+        return p == nullptr ? std::make_shared<Text>("") : *p;
       });
 }
 

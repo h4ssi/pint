@@ -23,7 +23,19 @@
 
 (test (not nil) 'negation')
 (test (not (not 1)) 'double negation')
+(def var 1337)
+(test (= var var) 'refs are equal')
 (test (= 1337 1337) 'numbers are equal')
+(test (not (= 1337 1338)) 'numbers are not equal')
+(test (= 'hello' 'hello') 'strings are equal')
+(test (not (= 'hello' 'goodbye')) 'strings are not equal')
+(test (= (quote hello) (quote hello)) 'symbols are equal')
+(test (not (= (quote hello) (quote goodbye))) 'symbols are not equal')
+(test (not (= hello hello)) 'fns are never equal')
+(test (= () ()) 'empty lists are equal')
+(test (= (cons 1) (cons 1)) 'lists are equal')
+(test (not (= () (cons 1))) 'lists are not equal')
+(test (not (= 1 "1")) 'different types are not equal')
 
 (def double (fn (x) (+ x x)))
 
