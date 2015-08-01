@@ -587,13 +587,25 @@ int main(int argc, char **argv) {
 
   std::ostringstream str;
 
-  if (argc == 2) {
+  if (argc >= 2) {
     str << std::ifstream(argv[1]).rdbuf();
   } else {
     str << std::cin.rdbuf();
   }
 
   std::string x = str.str();
+
+  if (argc >= 3) {
+    // TODO this is a cheat, we need proper io
+    std::ostringstream input;
+    if (std::string("-") == argv[2]) {
+      input << std::cin.rdbuf();
+    } else {
+      input << std::ifstream(argv[2]).rdbuf();
+    }
+    root["INPUT"] = std::make_shared<Text>(input.str());
+  }
+
   ParseResult pr = parse_expr(x, 0);
   std::list<std::shared_ptr<Expr>> program;
   while (pr.parsed()) {
