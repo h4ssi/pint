@@ -87,6 +87,12 @@
 (print ' Batman!')
 
 (test (= (str 1 2 3 'a' 'b' 'c' (quote d) (quote e) (quote f)) '123abcdef') 'str concat works')
+(test (= (substr 'asdf') 'asdf') 'substr with string only')
+(test (= (substr 'asdf' 2) 'df') 'substr with start only')
+(test (= (substr 'asdf' 4) '') 'substr with start = length')
+(test (= (substr 'asdf' 0 2) 'as') 'substr grep prefix')
+(test (= (substr 'asdf' 2 0) '') 'substr grep 0 length')
+(test (= (substr 'asdf' 2 20) 'df') 'substr grep beyond length')
 
 (print (str 'tests: ' num-tests))
 

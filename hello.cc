@@ -301,6 +301,32 @@ void setup() {
     auto ll = std::make_unique<List>(l);
     return std::make_shared<Text>(to_string(ll.get()));
   });
+  root["substr"] =
+      std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
+        auto i = std::begin(l);
+        auto e = std::end(l);
+
+        if (i != e) {
+          if (auto t = dynamic_cast<Text *>(i->get())) {
+            if (++i == e) {
+              return l.front();
+            } else {
+              if (auto l = dynamic_cast<Number *>(i->get())) {
+                if (++i == e) {
+                  return std::make_shared<Text>(std::string(
+                      t->value(), static_cast<std::size_t>(l->value())));
+                } else if (auto h = dynamic_cast<Number *>(i->get())) {
+                  return std::make_shared<Text>(std::string(
+                      t->value(), static_cast<std::size_t>(l->value()),
+                      static_cast<std::size_t>(h->value())));
+                }
+              }
+            }
+          }
+        }
+        return nullptr;
+      });
+
   root["symbol-name"] =
       std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
         for (auto const &v : l) {
