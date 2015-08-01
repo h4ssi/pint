@@ -9,4 +9,41 @@
 
     (to-list^ 0 to-list^)))
 
-(print (to-list INPUT))
+(def whitespace ' 	
+')
+
+(def nil (cons))
+(def nil? (fn (w) (if w nil '')))
+
+(def empty? (fn (l) (nil? (tail l))))
+
+(def in-list
+  (fn (e l)
+   
+    (def in-list^ 
+      (fn (ll rec)
+        (if (empty? ll)
+          nil
+            (if (= e (head ll))
+              ''
+              (rec (tail ll) rec)))))
+
+    (in-list^ l in-list^)))
+
+(def in-str
+  (fn (c string) (in-list c (to-list string))))
+
+(def map
+  (fn (f l)
+    (def map^ 
+      (fn (ll rec)
+        (if (empty? ll)
+          ()
+          (cons (f (head ll)) (rec (tail ll) rec)))))
+
+    (map^ l map^)))
+
+(def is-whitespace
+  (fn (x) (in-str x whitespace)))
+
+(print (map is-whitespace (to-list INPUT)))
