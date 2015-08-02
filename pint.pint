@@ -154,11 +154,11 @@
     (def m   (fn (l) (leduce (fn (nn dd) (* 10 nn)) 1 l)))
 
     (pair (+ (n dec) (* (n com) (/ (m com)))) rrr)))
+    
+(def err (fn (x m) (print m newline) (pair (cons nil) x)))
 
 (def parse-list 
   (fn (cs prs)
-    (def err (fn (x m) (print m newline) (pair (cons nil) x)))
-
     (def parse-list^
       (fn (ccs rec)
         
@@ -182,6 +182,36 @@
 
       (parse-list^ (tail cs) parse-list^)))
 
+(def parse-string
+  (fn (cs rec)
+    (def pcons
+      (fn (i p)
+        (def f (head p))
+        (def s (head (tail p)))
+
+        (if f 
+          (pair (cons i f) s)
+          p)))
+
+    (def escape 
+      (fn (escape-next ccs rec)
+        (if (empty? ccs)
+          (err ccs 'unexpected eof during string')
+          (if escape-next
+            (pcons (head ccs) (rec nil (tail ccs) rec))
+            (if (= '\\' (head ccs))
+              (rec '' (tail ccs) rec)
+              (if (= '\'' (head ccs))
+                (pair () (tail ccs))
+                (pcons (head ccs) (rec nil (tail ccs) rec))))))))
+
+    (def e (escape nil (tail cs) escape))
+    
+    (def f (head e))
+    (def s (head (tail e)))
+
+    (pair (str f) s)))
+
 (def parse-expr
   (fn (cs rec)
     (if (empty? cs)
@@ -191,9 +221,10 @@
         (if (= c ';') (rec (drop-while not-is-newline cs) rec)
         (if (= c OP) (parse-list cs rec)
         (if (= c CP) (pair nil cs)
+        (if (= c '\'') (parse-string cs rec)
         (if (is-digit c) (parse-number cs rec)
         (parse-sym cs rec)
-        )))))
+        ))))))
       )(head cs)))))
 
 
