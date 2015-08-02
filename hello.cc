@@ -536,6 +536,24 @@ void setup() {
     }
     return std::make_shared<Number>(s);
   });
+  root["*"] = std::make_shared<Function>([](auto const &l) {
+    double s = 1;
+    for (auto const &v : l) {
+      if (Number *d = dynamic_cast<Number *>(v.get())) {
+        s *= d->value();
+      }
+    }
+    return std::make_shared<Number>(s);
+  });
+  root["/"] = std::make_shared<Function>([](auto const &l) {
+    double s = 1;
+    for (auto const &v : l) {
+      if (Number *d = dynamic_cast<Number *>(v.get())) {
+        s /= d->value();
+      }
+    }
+    return std::make_shared<Number>(s);
+  });
   root["="] =
       std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
         std::shared_ptr<Value> const *p = nullptr;
