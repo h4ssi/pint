@@ -9,8 +9,9 @@
 
     (to-list^ 0 to-list^)))
 
-(def whitespace ' 	
+(def newline '
 ')
+(def whitespace (str ' 	' newline))
 
 (def nil (cons))
 (def nil? (fn (w) (if w nil '')))
@@ -53,8 +54,78 @@
 
 (def is-whitespace
   (fn (x) (in-str x whitespace)))
+(def is-newline
+  (fn (x) (in-str x newline)))
+(def not-is-newline
+  (fn (x) (not (is-newline x))))
 
 (def t-ws
   (fn (x) (if (is-whitespace x) '_' x)))
 
-(print (map t-ws (to-list INPUT)))
+(def drop-while 
+  (fn (p l)
+    
+    (def drop-while^
+      (fn (ll rec)
+        (if (empty? ll)
+          ll
+          (if (p (head ll))
+            (rec (tail ll) rec)
+            ll))))
+
+    (drop-while^ l drop-while^)))
+
+(def take-while
+  (fn (p l)
+    
+    (def take-while^ 
+      (fn (ll rec)
+        (if (empty? ll)
+          ll
+          (if (p (head ll))
+            (cons (head ll) (rec (tail ll) rec))
+            ()))))
+
+    (take-while^ l take-while^)))
+
+(def pair
+  (fn (l r)
+    (cons l (cons r))))
+
+
+(def parse-sym 
+  (fn (cs prs)
+    (def sym-char
+      (fn (c) (not (in-str c (str whitespace '()\';')))))
+
+    (pair 
+      (symbol (str (take-while sym-char cs)))
+      (drop-while sym-char cs))))
+
+(def parse-expr
+  (fn (cs rec)
+    (if (empty? cs)
+      nil
+      ((fn (c)
+        (if (is-whitespace c) (rec (drop-while is-whitespace cs) rec)
+        (if (= c ';') (rec (drop-while not-is-newline cs) rec)
+        (parse-sym cs rec)
+        ))
+      )(head cs)))))
+
+
+(def parse-all
+  (fn (cs rec)
+    ((fn (p)
+    (if (nil? p)
+      ()
+      ((fn (t r)
+        (if (nil? t)
+          (cons t)
+          (cons t (rec r rec)))
+      )(head p)(head (tail p)))
+    )
+    )(parse-expr cs parse-expr))))
+
+
+(print (parse-all (to-list INPUT) parse-all))
