@@ -14,36 +14,47 @@
 
 (def nil (cons))
 (def nil? (fn (w) (if w nil '')))
+(def not  (fn (c) (if c nil '')))
 
 (def empty? (fn (l) (nil? (tail l))))
 
+(def reduce
+  (fn (f i l)
+    (def reduce^
+      (fn (res ll rec)
+        (if (empty? ll)
+          res
+          (f (rec res (tail ll) rec) (head ll)))))
+
+    (reduce^ i l reduce^)))
+
+(def filter
+  (fn (p l)
+    (reduce 
+      (fn (res i)
+        (if (p i) (cons i res) res))
+      ()
+      l)))
+
+(def map
+  (fn (t l)
+    (reduce
+      (fn (res i)
+        (cons (t i) res))
+      ()
+      l)))
+
 (def in-list
   (fn (e l)
-   
-    (def in-list^ 
-      (fn (ll rec)
-        (if (empty? ll)
-          nil
-            (if (= e (head ll))
-              ''
-              (rec (tail ll) rec)))))
-
-    (in-list^ l in-list^)))
+    (not (empty? (filter (fn (i) (= i e)) l)))))   
 
 (def in-str
   (fn (c string) (in-list c (to-list string))))
 
-(def map
-  (fn (f l)
-    (def map^ 
-      (fn (ll rec)
-        (if (empty? ll)
-          ()
-          (cons (f (head ll)) (rec (tail ll) rec)))))
-
-    (map^ l map^)))
-
 (def is-whitespace
   (fn (x) (in-str x whitespace)))
 
-(print (map is-whitespace (to-list INPUT)))
+(def t-ws
+  (fn (x) (if (is-whitespace x) '_' x)))
+
+(print (map t-ws (to-list INPUT)))
