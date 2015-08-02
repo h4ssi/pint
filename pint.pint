@@ -9,6 +9,9 @@
 
     (to-list^ 0 to-list^)))
 
+(def OP '(') ; ) (
+(def CP ')')
+
 (def newline '
 ')
 (def whitespace (str ' 	' newline))
@@ -96,11 +99,38 @@
 (def parse-sym 
   (fn (cs prs)
     (def sym-char
-      (fn (c) (not (in-str c (str whitespace '()\';')))))
+      (fn (c) (not (in-str c (str whitespace CP OP '\';')))))
 
     (pair 
       (symbol (str (take-while sym-char cs)))
       (drop-while sym-char cs))))
+
+(def parse-list 
+  (fn (cs prs)
+    (def err (fn (x m) (print m newline) (pair (cons nil) x)))
+
+    (def parse-list^
+      (fn (ccs rec)
+        
+        ((fn (p)
+          (if (nil? p)
+            (err ccs 'unexpected eof during list')
+            ((fn (t r)
+              (if (nil? t) ; end of list maybe?
+                (if (empty? r)
+                  (err ccs 'missing end of list')
+                  (if (= CP (head r))
+                    (pair () (tail r))
+                    (err ccs (str 'unexpected: ' (head r)))))
+                ((fn (pp)
+                ((fn (tt rr)
+                  (pair (cons t tt) rr)
+                )(head pp)(head (tail pp)))
+                )(rec r rec)))
+            )(head p)(head (tail p))))
+        )(prs ccs prs))))
+
+      (parse-list^ (tail cs) parse-list^)))
 
 (def parse-expr
   (fn (cs rec)
@@ -109,8 +139,10 @@
       ((fn (c)
         (if (is-whitespace c) (rec (drop-while is-whitespace cs) rec)
         (if (= c ';') (rec (drop-while not-is-newline cs) rec)
+        (if (= c OP) (parse-list cs rec)
+        (if (= c CP) (pair nil cs)
         (parse-sym cs rec)
-        ))
+        ))))
       )(head cs)))))
 
 
