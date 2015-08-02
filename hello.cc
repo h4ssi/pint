@@ -21,6 +21,110 @@
 #include <list>
 #include <memory>
 
+using std::begin;
+using std::end;
+
+template <typename T> class list_head;
+
+template <typename T> class list_elem {
+public:
+  list_elem(T &&v, std::shared_ptr<list_elem<T>> n) noexcept(
+      noexcept(decltype(value)(std::forward<T>(v))) &&
+      noexcept(decltype(next)(n)))
+      : value(std::forward<T>(v)), next(n) {}
+  list_elem() = delete;
+  list_elem(list_elem<T> const &) = default;
+  list_elem(list_elem<T> &&) = default;
+  list_elem &operator=(list_elem<T> const &) = default;
+  list_elem &operator=(list_elem<T> &&) = default;
+
+private:
+  T value;
+  std::shared_ptr<list_elem<T>> next;
+
+  friend class list_head<T>;
+};
+
+template <typename T>
+typename list_head<T>::iterator begin(list_head<T> const &);
+template <typename T> typename list_head<T>::iterator end(list_head<T> const &);
+
+template <typename T> class list_head {
+public:
+  list_head() = default;
+  list_head(list_head<T> const &) = default;
+  list_head(list_head<T> &&) = default;
+  list_head &operator=(list_head<T> const &) = default;
+  list_head &operator=(list_head<T> &&) = default;
+  template <typename... Args> void emplace_front(Args &&... args) {
+    head = std::make_shared<list_elem<T>>(T(std::forward<Args>(args)...), head);
+  }
+  bool empty() const { return head == nullptr; }
+  T const front() const { return head->value; }
+  T front() {
+    return const_cast<T>(const_cast<list_head<T> const *>(this)->front());
+  }
+  list_head<T> const tail() const { return list_head<T>(head->next); }
+  list_head<T> tail() {
+    return const_cast<list_head<T>>(
+        const_cast<list_head<T> const *>(this)->tail());
+  }
+  class iterator : public std::iterator<std::forward_iterator_tag, T> {
+  public:
+    iterator(std::shared_ptr<list_elem<T>> p) noexcept(
+        noexcept(decltype(pos)(p)))
+        : pos(p) {}
+    iterator() = delete;
+    iterator(iterator const &) = default;
+    iterator(iterator &&) = default;
+    iterator &operator=(iterator const &) = default;
+    iterator &operator=(iterator &&) = default;
+    iterator &operator++() {
+      advance();
+      return *this;
+    }
+    iterator operator++(int) {
+      auto p = *this;
+      advance();
+      return p;
+    }
+    bool operator==(iterator const &other) const {
+      return this->pos == other.pos;
+    }
+    bool operator!=(iterator const &other) const {
+      return this->pos != other.pos;
+    }
+    T const &operator*() const { return this->pos->value; }
+    T const *operator->() const { return &this->pos->value; }
+
+  private:
+    void advance() {
+      if (pos != nullptr) {
+        pos = pos->next;
+      }
+    }
+    std::shared_ptr<list_elem<T>> pos;
+  };
+
+private:
+  list_head(std::shared_ptr<list_elem<T>> h) noexcept(
+      noexcept(decltype(head)(h)))
+      : head(h) {}
+  std::shared_ptr<list_elem<T>> head;
+
+  friend list_head<T>::iterator begin<T>(list_head<T> const &l);
+  friend list_head<T>::iterator end<T>(list_head<T> const &l);
+};
+
+template <typename T>
+typename list_head<T>::iterator begin(list_head<T> const &l) {
+  return typename list_head<T>::iterator(l.head);
+}
+template <typename T>
+typename list_head<T>::iterator end(list_head<T> const &) {
+  return typename list_head<T>::iterator(nullptr);
+}
+
 // value = programmatic value
 //       = expr (everything that is code)
 //       | function (concrete function value)
@@ -59,7 +163,7 @@ class Symbol : public Expr, public ValueHolder<std::string> {
 };
 
 class List : public Expr,
-             public ValueHolder<std::list<std::shared_ptr<Value>>> {
+             public ValueHolder<list_head<std::shared_ptr<Value>>> {
   using ValueHolder::ValueHolder;
 };
 
@@ -143,6 +247,8 @@ ParseResult parse_number(std::string const &s, std::size_t pos) {
   return ParseResult(std::make_shared<Number>(num), f);
 }
 
+#include <algorithm>
+
 ParseResult parse_list(std::string const &s, std::size_t pos) {
   std::list<std::shared_ptr<Value>> l;
 
@@ -167,7 +273,15 @@ ParseResult parse_list(std::string const &s, std::size_t pos) {
 
     std::cout << ")" << std::endl;
 
-    return ParseResult(std::make_shared<List>(l), r.pos() + 1);
+    std::reverse(begin(l), end(l));
+
+    list_head<std::shared_ptr<Value>> ll;
+
+    for (auto const &e : l) {
+      ll.emplace_front(e);
+    }
+
+    return ParseResult(std::make_shared<List>(ll), r.pos() + 1);
   }
 }
 
@@ -281,8 +395,7 @@ bool eq(std::shared_ptr<Value> const &l, std::shared_ptr<Value> const &r) {
     if (auto lr = dynamic_cast<List *>(r.get())) {
       auto const &lll = ll->value();
       auto const &llr = lr->value();
-      return std::equal(std::begin(lll), std::end(lll), std::begin(llr),
-                        std::end(llr), eq);
+      return std::equal(begin(lll), end(lll), begin(llr), end(llr), eq);
     }
     return false;
   }
@@ -298,13 +411,19 @@ void setup() {
         return nullptr;
       });
   root["str"] = std::make_shared<Function>([](auto const &l) {
-    auto ll = std::make_unique<List>(l);
-    return std::make_shared<Text>(to_string(ll.get()));
+    auto rl = l;
+    std::reverse(begin(rl), end(rl));
+    list_head<std::shared_ptr<Value>> ll;
+    for (auto const &v : rl) {
+      ll.emplace_front(v);
+    }
+    List lll(ll);
+    return std::make_shared<Text>(to_string(&lll));
   });
   root["substr"] =
       std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
-        auto i = std::begin(l);
-        auto e = std::end(l);
+        auto i = begin(l);
+        auto e = end(l);
 
         if (i != e) {
           if (auto t = dynamic_cast<Text *>(i->get())) {
@@ -349,8 +468,8 @@ void setup() {
       });
   root["cons"] =
       std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
-        auto i = std::begin(l);
-        auto e = std::end(l);
+        auto i = begin(l);
+        auto e = end(l);
 
         if (i == e) {
           return nullptr;
@@ -359,13 +478,13 @@ void setup() {
         auto head = *i;
 
         if (++i == e || *i == nullptr) {
-          std::list<std::shared_ptr<Value>> nl;
+          list_head<std::shared_ptr<Value>> nl;
           nl.emplace_front(head);
           return std::make_shared<List>(nl);
         }
 
         if (auto ol = dynamic_cast<List *>(i->get())) {
-          std::list<std::shared_ptr<Value>> nl(ol->value());
+          list_head<std::shared_ptr<Value>> nl(ol->value());
           nl.emplace_front(head);
           return std::make_shared<List>(nl);
         } else {
@@ -376,7 +495,7 @@ void setup() {
       std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
         for (auto const &v : l) {
           if (auto ll = dynamic_cast<List *>(v.get())) {
-            if (ll->value().size()) {
+            if (!ll->value().empty()) {
               return ll->value().front();
             }
           }
@@ -388,10 +507,8 @@ void setup() {
       std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
         for (auto const &v : l) {
           if (auto ll = dynamic_cast<List *>(v.get())) {
-            if (ll->value().size()) {
-              auto lll = ll->value();
-              lll.pop_front();
-              return std::make_shared<List>(lll);
+            if (!ll->value().empty()) {
+              return std::make_shared<List>(ll->value().tail());
             }
           }
           break;
@@ -473,7 +590,7 @@ Memory copy_vars(Memory &m, std::unordered_set<std::string> free_vars) {
 std::list<std::string> arg_list(List const *f) {
   std::list<std::string> ret;
 
-  auto i = std::begin(f->value());
+  auto i = begin(f->value());
 
   ++i;
 
@@ -503,14 +620,14 @@ std::list<std::shared_ptr<Value>> body_list(List const *f) {
 
 Memory populate(Memory m, std::list<std::string> args,
                 std::list<std::shared_ptr<Value>> const &vals) {
-  auto i = std::begin(vals);
+  auto i = begin(vals);
   for (auto const &s : args) {
     m[s] = *i++;
   }
   return m;
 }
 
-std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> e);
+std::shared_ptr<Value> eval(Memory &, std::shared_ptr<Value>);
 
 FunctionType eval_to_f(Memory &pm, List *f) {
   return [
@@ -530,28 +647,28 @@ FunctionType eval_to_f(Memory &pm, List *f) {
   };
 }
 
-std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> e) {
-  if (auto var = dynamic_cast<Symbol *>(e.get())) {
+std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> expr) {
+  if (auto var = dynamic_cast<Symbol *>(expr.get())) {
     return m[var->value()];
-  } else if (auto l = dynamic_cast<List *>(e.get())) {
+  } else if (auto l = dynamic_cast<List *>(expr.get())) {
     if (l->value().empty()) {
       return std::make_shared<List>(); // empty form
     }
     auto const &list = l->value();
-    auto i = std::begin(list);
-    auto end = std::end(list);
+    auto i = begin(list);
+    auto e = end(list);
     if (auto s = dynamic_cast<Symbol *>(i->get())) {
       if ("do" == s->value()) {
         std::shared_ptr<Value> r;
-        while (++i != end) {
+        while (++i != e) {
           r = eval(m, *i);
         }
         return r;
       }
       if ("def" == s->value()) {
-        if (++i != end) {
+        if (++i != e) {
           if (auto t = dynamic_cast<Symbol *>(i->get())) {
-            if (++i != end) {
+            if (++i != e) {
               return (m[t->value()] = eval(m, *i));
             }
           }
@@ -565,12 +682,12 @@ std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> e) {
         return std::make_shared<Macro>(eval_to_f(m, l));
       }
       if ("if" == s->value()) {
-        if (++i != end) {
+        if (++i != e) {
           auto cond = eval(m, *i);
-          if (++i != end) {
+          if (++i != e) {
             if (cond != nullptr) {
               return eval(m, *i);
-            } else if (++i != end) {
+            } else if (++i != e) {
               return eval(m, *i);
             }
           }
@@ -578,7 +695,7 @@ std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> e) {
         return nullptr;
       }
       if ("quote" == s->value()) {
-        if (++i != end) {
+        if (++i != e) {
           return *i;
         }
         return nullptr;
@@ -587,21 +704,21 @@ std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> e) {
     auto head = eval(m, *i);
     if (Macro *c = dynamic_cast<Macro *>(head.get())) {
       std::list<std::shared_ptr<Value>> args;
-      while (++i != end) {
+      while (++i != e) {
         args.emplace_back(*i);
       }
       return eval(m, (c->value())(args));
     }
     if (Function *f = dynamic_cast<Function *>(head.get())) {
       std::list<std::shared_ptr<Value>> args;
-      while (++i != end) {
+      while (++i != e) {
         args.emplace_back(eval(m, *i));
       }
       return (f->value())(args);
     }
     return nullptr;
   } else {
-    return e;
+    return expr;
   }
 }
 
