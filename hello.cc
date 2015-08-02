@@ -142,8 +142,9 @@ class Expr : public Value {};
 template <typename T> class ValueHolder {
 public:
   ValueHolder() = default;
-  ValueHolder(T const &o) : v(o) {}
-  ValueHolder(T &&o) : v(std::move(o)) {}
+  ValueHolder(T const &o) noexcept(noexcept(decltype(v)(o))) : v(o) {}
+  ValueHolder(T &&o) noexcept(noexcept(decltype(v)(std::move(o))))
+      : v(std::move(o)) {}
   T const &value() const { return v; }
 
 private:
@@ -170,7 +171,9 @@ class List : public Expr,
 // todo: shared ptr correct choice?
 class ParseResult {
 public:
-  ParseResult(std::shared_ptr<Expr> expr, std::size_t pos)
+  ParseResult(std::shared_ptr<Expr> expr,
+              std::size_t pos) noexcept(noexcept(decltype(expr_)(expr)) &&
+                                        noexcept(decltype(pos_)(pos)))
       : expr_(expr), pos_(pos) {}
   std::size_t pos() const { return pos_; }
   bool parsed() const { return expr_ != nullptr; }
