@@ -15,6 +15,7 @@
 (def newline '
 ')
 (def whitespace (str ' 	' newline))
+(def digit '0123456789')
 
 (def nil (cons))
 (def nil? (fn (w) (if w nil '')))
@@ -31,6 +32,20 @@
           (f (rec res (tail ll) rec) (head ll)))))
 
     (reduce^ i l reduce^)))
+
+(def leduce
+  (fn (f i l)
+    (def leduce^
+      (fn (res ll rec)
+        (if (empty? ll)
+          res
+          (rec (f res (head ll)) (tail ll) rec))))
+
+    (leduce^ i l leduce^)))
+
+(def reverse
+  (fn (l)
+    (leduce (fn (res i) (cons i res)) () l)))
 
 (def filter
   (fn (p l)
@@ -61,6 +76,8 @@
   (fn (x) (in-str x newline)))
 (def not-is-newline
   (fn (x) (not (is-newline x))))
+(def is-digit
+  (fn (x) (in-str x digit)))
 
 (def t-ws
   (fn (x) (if (is-whitespace x) '_' x)))
@@ -105,6 +122,39 @@
       (symbol (str (take-while sym-char cs)))
       (drop-while sym-char cs))))
 
+(def digit-to-number
+  (fn (d)
+    (if (= d '0') 0
+    (if (= d '1') 1
+    (if (= d '2') 2
+    (if (= d '3') 3
+    (if (= d '4') 4
+    (if (= d '5') 5
+    (if (= d '6') 6
+    (if (= d '7') 7
+    (if (= d '8') 8
+    (if (= d '9') 9
+    nil))))))))))))
+
+(def parse-number
+  (fn (cs prs)
+    (def dec (take-while is-digit cs))
+    (def r   (drop-while is-digit cs))
+    
+    (def rr  (if (empty? r) 
+               r 
+               (if (= '.' (head r)) 
+                (tail r)
+                r)))
+
+    (def com (take-while is-digit rr))
+    (def rrr (drop-while is-digit rr))
+
+    (def n   (fn (l) (leduce (fn (nn dd) (+ (digit-to-number dd) (* 10 nn))) 0 l)))
+    (def m   (fn (l) (leduce (fn (nn dd) (* 10 nn)) 1 l)))
+
+    (pair (+ (n dec) (* (n com) (/ (m com)))) rrr)))
+
 (def parse-list 
   (fn (cs prs)
     (def err (fn (x m) (print m newline) (pair (cons nil) x)))
@@ -141,8 +191,9 @@
         (if (= c ';') (rec (drop-while not-is-newline cs) rec)
         (if (= c OP) (parse-list cs rec)
         (if (= c CP) (pair nil cs)
+        (if (is-digit c) (parse-number cs rec)
         (parse-sym cs rec)
-        ))))
+        )))))
       )(head cs)))))
 
 
