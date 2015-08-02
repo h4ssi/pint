@@ -433,14 +433,14 @@ void setup() {
             if (++i == e) {
               return l.front();
             } else {
-              if (auto l = dynamic_cast<Number *>(i->get())) {
+              if (auto pos = dynamic_cast<Number *>(i->get())) {
                 if (++i == e) {
                   return std::make_shared<Text>(std::string(
-                      t->value(), static_cast<std::size_t>(l->value())));
-                } else if (auto h = dynamic_cast<Number *>(i->get())) {
+                      t->value(), static_cast<std::size_t>(pos->value())));
+                } else if (auto len = dynamic_cast<Number *>(i->get())) {
                   return std::make_shared<Text>(std::string(
-                      t->value(), static_cast<std::size_t>(l->value()),
-                      static_cast<std::size_t>(h->value())));
+                      t->value(), static_cast<std::size_t>(pos->value()),
+                      static_cast<std::size_t>(len->value())));
                 }
               }
             }
