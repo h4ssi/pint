@@ -744,8 +744,37 @@ std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> expr) {
 }
 
 #include <fstream>
+#include <dlfcn.h>
+#include <ffi.h>
 
 int main(int argc, char **argv) {
+  void *dll = dlopen(NULL, RTLD_LAZY);
+  if (dll == nullptr) {
+    std::cout << "fail" << std::endl;
+  } else {
+    std::cout << "succ" << std::endl;
+    void *fp = dlsym(dll, "puts");
+    ((int (*)(char *))fp)("hmmm...");
+    if (fp == nullptr) {
+      std::cout << "fail" << std::endl;
+    } else {
+      std::cout << "succ" << std::endl;
+      ffi_cif cif;
+      ffi_type *argt[] = {&ffi_type_pointer};
+      char *h = "hello from ffi!";
+      void *argv[] = {(void *)&h};
+      ffi_status st =
+          ffi_prep_cif(&cif, FFI_DEFAULT_ABI, 1, &ffi_type_sint, argt);
+      if (st != FFI_OK) {
+        std::cout << "fail" << std::endl;
+      } else {
+        std::cout << "succ" << std::endl;
+        int frs;
+        ffi_call(&cif, (void (*)())fp, &frs, argv);
+      }
+    }
+  }
+
   setup();
   std::cout << "hello world!" << std::endl;
 
