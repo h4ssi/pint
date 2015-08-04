@@ -747,13 +747,32 @@ std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> expr) {
 #include <dlfcn.h>
 #include <ffi.h>
 
+class Dl {
+public:
+  Dl() : dl_handle(dlopen(nullptr, RTLD_LAZY)) {}
+  Dl(Dl const &) = delete;
+  Dl &operator=(Dl const &) = delete;
+  bool valid() const { return dl_handle != nullptr; }
+  void *function(std::string name) const {
+    return dlsym(dl_handle, name.c_str());
+  }
+  ~Dl() {
+    if (dl_handle != nullptr) {
+      dlclose(dl_handle);
+    }
+  }
+
+private:
+  void *dl_handle;
+};
+
 int main(int argc, char **argv) {
-  void *dll = dlopen(NULL, RTLD_LAZY);
-  if (dll == nullptr) {
+  Dl dl;
+  if (!dl.valid()) {
     std::cout << "fail" << std::endl;
   } else {
     std::cout << "succ" << std::endl;
-    void *fp = dlsym(dll, "puts");
+    void *fp = dl.function("puts");
     ((int (*)(char *))fp)("hmmm...");
     if (fp == nullptr) {
       std::cout << "fail" << std::endl;
