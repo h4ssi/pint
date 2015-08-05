@@ -1,5 +1,6 @@
 
 (print 'hello world!');
+(c-call puts int * 'hello world from c puts call!')
 
 (def hello (fn () (print 1)))
 

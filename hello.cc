@@ -668,6 +668,12 @@ FunctionType eval_to_f(Memory &pm, List *f) {
   };
 }
 
+#include <tuple>
+
+std::shared_ptr<Value>
+c_call(Symbol fn, Symbol ret_type,
+       std::list<std::tuple<Symbol, std::shared_ptr<Value>>> args);
+
 std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> expr) {
   if (auto var = dynamic_cast<Symbol *>(expr.get())) {
     return m[var->value()];
@@ -721,6 +727,28 @@ std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> expr) {
         }
         return nullptr;
       }
+      if ("c-call" == s->value()) {
+        if (++i != e) {
+          if (auto fn = dynamic_cast<Symbol *>(i->get())) {
+            if (++i != e) {
+              if (auto ret_type = dynamic_cast<Symbol *>(i->get())) {
+                std::list<std::tuple<Symbol, std::shared_ptr<Value>>> args;
+                while (++i != e) {
+                  if (auto arg_type = dynamic_cast<Symbol *>(i->get())) {
+                    if (++i != e) {
+                      if (auto arg = eval(m, *i)) {
+                        args.emplace_back(std::make_tuple(*arg_type, arg));
+                      }
+                    }
+                  }
+                }
+                return c_call(*fn, *ret_type, args);
+              }
+            }
+          }
+        }
+        return nullptr;
+      }
     }
     auto head = eval(m, *i);
     if (Macro *c = dynamic_cast<Macro *>(head.get())) {
@@ -766,34 +794,68 @@ private:
   void *dl_handle;
 };
 
-int main(int argc, char **argv) {
-  Dl dl;
-  if (!dl.valid()) {
-    std::cout << "fail" << std::endl;
+Dl dl;
+
+ffi_type *to_type(std::string name) {
+  if (name == "*") {
+    return &ffi_type_pointer;
   } else {
-    std::cout << "succ" << std::endl;
-    void *fp = dl.function("puts");
-    ((int (*)(char *))fp)("hmmm...");
-    if (fp == nullptr) {
-      std::cout << "fail" << std::endl;
-    } else {
-      std::cout << "succ" << std::endl;
-      ffi_cif cif;
-      ffi_type *argt[] = {&ffi_type_pointer};
-      char *h = "hello from ffi!";
-      void *argv[] = {(void *)&h};
-      ffi_status st =
-          ffi_prep_cif(&cif, FFI_DEFAULT_ABI, 1, &ffi_type_sint, argt);
-      if (st != FFI_OK) {
-        std::cout << "fail" << std::endl;
-      } else {
-        std::cout << "succ" << std::endl;
-        int frs;
-        ffi_call(&cif, (void (*)())fp, &frs, argv);
-      }
+    return &ffi_type_sint; // todo add more
+  }
+}
+
+void *to_val(ffi_type *type, Value *val) {
+  if (&ffi_type_pointer == type) {
+    if (auto t = dynamic_cast<Text *>(val)) {
+      const char **p = new const char *; // todo memory leak
+      *p = t->value().c_str();
+      return p;
+    }
+  } else {
+    if (auto n = dynamic_cast<Number *>(val)) {
+      int *i = new int; // todo memory leak
+      *i = (int)(n->value());
+      return i;
     }
   }
+  return nullptr;
+}
 
+std::shared_ptr<Value>
+c_call(Symbol fn, Symbol ret_type,
+       std::list<std::tuple<Symbol, std::shared_ptr<Value>>> args) {
+  void *fp = dl.function(fn.value());
+  if (fp == nullptr) {
+    std::cerr << "no such c func" << std::endl;
+    return nullptr;
+  }
+
+  ffi_cif cif;
+  auto types = std::make_unique<ffi_type *[]>(args.size());
+  auto vals = std::make_unique<void *[]>(args.size());
+
+  std::size_t i = 0;
+  for (auto const &arg : args) {
+    types[i] = to_type(std::get<0>(arg).value());
+    vals[i] = to_val(types[i], std::get<1>(arg).get());
+  }
+  ffi_status st = ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args.size(),
+                               to_type(ret_type.value()), types.get());
+  if (st != FFI_OK) {
+    std::cerr << "failed preparing cif" << std::endl;
+    return nullptr;
+  }
+  ffi_sarg frs;
+  ffi_call(&cif, (void (*)())fp, &frs, vals.get());
+
+  return nullptr;
+}
+
+int main(int argc, char **argv) {
+  if (!dl.valid()) {
+    std::cout << "cannot load dl" << std::endl;
+    return 1;
+  }
   setup();
   std::cout << "hello world!" << std::endl;
 
