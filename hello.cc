@@ -799,6 +799,8 @@ Dl dl;
 ffi_type *to_type(std::string name) {
   if (name == "*") {
     return &ffi_type_pointer;
+  } else if (name == "void") {
+    return &ffi_type_void;
   } else {
     return &ffi_type_sint; // todo add more
   }
@@ -822,8 +824,12 @@ void *to_val(ffi_type *type, Value *val) {
 }
 
 std::shared_ptr<Value> from_val(ffi_type *type, void *ret) {
-  return std::make_shared<Number>(
-      static_cast<double>(*static_cast<ffi_sarg *>(ret)));
+  if (type == &ffi_type_void) {
+    return nullptr;
+  } else {
+    return std::make_shared<Number>(
+        static_cast<double>(*static_cast<ffi_sarg *>(ret)));
+  }
 }
 
 std::shared_ptr<Value>
