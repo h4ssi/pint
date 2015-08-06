@@ -821,6 +821,11 @@ void *to_val(ffi_type *type, Value *val) {
   return nullptr;
 }
 
+std::shared_ptr<Value> from_val(ffi_type *type, void *ret) {
+  return std::make_shared<Number>(
+      static_cast<double>(*static_cast<ffi_sarg *>(ret)));
+}
+
 std::shared_ptr<Value>
 c_call(Symbol fn, Symbol ret_type,
        std::list<std::tuple<Symbol, std::shared_ptr<Value>>> args) {
@@ -834,13 +839,14 @@ c_call(Symbol fn, Symbol ret_type,
   auto types = std::make_unique<ffi_type *[]>(args.size());
   auto vals = std::make_unique<void *[]>(args.size());
 
+  auto return_type = to_type(ret_type.value());
   std::size_t i = 0;
   for (auto const &arg : args) {
     types[i] = to_type(std::get<0>(arg).value());
     vals[i] = to_val(types[i], std::get<1>(arg).get());
   }
-  ffi_status st = ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args.size(),
-                               to_type(ret_type.value()), types.get());
+  ffi_status st = ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args.size(), return_type,
+                               types.get());
   if (st != FFI_OK) {
     std::cerr << "failed preparing cif" << std::endl;
     return nullptr;
@@ -848,7 +854,7 @@ c_call(Symbol fn, Symbol ret_type,
   ffi_sarg frs;
   ffi_call(&cif, (void (*)())fp, &frs, vals.get());
 
-  return nullptr;
+  return from_val(return_type, &frs);
 }
 
 int main(int argc, char **argv) {
