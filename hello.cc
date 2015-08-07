@@ -815,20 +815,20 @@ public:
 template <typename T>
 class DynamicCVal : public CVal, public std::unique_ptr<T> {
 public:
-  DynamicCVal(std::unique_ptr<T> &&t) : std::unique_ptr<T>(std::move(t)) {}
+  template <typename... Args>
+  DynamicCVal(Args &&... t)
+      : std::unique_ptr<T>(std::make_unique<T>(std::forward<Args>(t)...)) {}
   void *p() override { return static_cast<void *>(this->get()); }
 };
 
 std::unique_ptr<CVal> to_val(ffi_type *type, Value *val) {
   if (&ffi_type_pointer == type) {
     if (auto t = dynamic_cast<Text *>(val)) {
-      return std::make_unique<DynamicCVal<const char *>>(
-          std::make_unique<const char *>(t->value().c_str()));
+      return std::make_unique<DynamicCVal<const char *>>(t->value().c_str());
     }
   } else {
     if (auto n = dynamic_cast<Number *>(val)) {
-      return std::make_unique<DynamicCVal<int>>(
-          std::make_unique<int>(n->value()));
+      return std::make_unique<DynamicCVal<int>>(n->value());
     }
   }
   return nullptr;
