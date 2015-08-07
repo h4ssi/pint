@@ -806,18 +806,28 @@ ffi_type *to_type(std::string name) {
   }
 }
 
-void *to_val(ffi_type *type, Value *val) {
+class CVal {
+public:
+  virtual void *p() = 0;
+  virtual ~CVal() = default;
+};
+
+template <typename T>
+class DynamicCVal : public CVal, public std::unique_ptr<T> {
+public:
+  DynamicCVal(std::unique_ptr<T> &&t) : std::unique_ptr<T>(std::move(t)) {}
+  void *p() override { return static_cast<void *>(this->get()); }
+};
+
+CVal *to_val(ffi_type *type, Value *val) {
   if (&ffi_type_pointer == type) {
     if (auto t = dynamic_cast<Text *>(val)) {
-      const char **p = new const char *; // todo memory leak
-      *p = t->value().c_str();
-      return p;
+      return new DynamicCVal<const char *>(
+          std::make_unique<const char *>(t->value().c_str()));
     }
   } else {
     if (auto n = dynamic_cast<Number *>(val)) {
-      int *i = new int; // todo memory leak
-      *i = (int)(n->value());
-      return i;
+      return new DynamicCVal<int>(std::make_unique<int>(n->value()));
     }
   }
   return nullptr;
@@ -849,7 +859,7 @@ c_call(Symbol fn, Symbol ret_type,
   std::size_t i = 0;
   for (auto const &arg : args) {
     types[i] = to_type(std::get<0>(arg).value());
-    vals[i] = to_val(types[i], std::get<1>(arg).get());
+    vals[i] = to_val(types[i], std::get<1>(arg).get())->p();
   }
   ffi_status st = ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args.size(), return_type,
                                types.get());
