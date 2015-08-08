@@ -135,34 +135,28 @@ public:
 };
 
 // expr = list | number | text | symbol
-// list = ( expr * ) // todo should be "value *"
+// list = ( expr * ) // might be actually "value *"
 
 class Expr : public Value {};
 
 #include <tuple>
 
+// "mixin" to hold a value
 template <typename T> class ValueHolder : private std::tuple<T> {
 public:
   using std::tuple<T>::tuple;
   T const &value() const { return std::get<0>(*this); }
 };
 
-class Number : public Expr, public ValueHolder<double> {
-  using ValueHolder::ValueHolder;
+template <class T, unsigned D = 0>
+class PintExpr : public Expr, public ValueHolder<T> {
+  using ValueHolder<T>::ValueHolder;
 };
 
-class Text : public Expr, public ValueHolder<std::string> {
-  using ValueHolder::ValueHolder;
-};
-
-class Symbol : public Expr, public ValueHolder<std::string> {
-  using ValueHolder::ValueHolder;
-};
-
-class List : public Expr,
-             public ValueHolder<list_head<std::shared_ptr<Value>>> {
-  using ValueHolder::ValueHolder;
-};
+using Number = PintExpr<double>;
+using Text = PintExpr<std::string>;
+using Symbol = PintExpr<std::string, 1>;
+using List = PintExpr<list_head<std::shared_ptr<Value>>>;
 
 // todo: shared ptr correct choice?
 class ParseResult {
@@ -301,19 +295,23 @@ ParseResult parse_expr(std::string const &s, std::size_t pos) {
   }
 }
 
-#include <unordered_map>
+template <class T> class PintValue : public Value, public ValueHolder<T> {
+  using ValueHolder<T>::ValueHolder;
+};
 
 // function = arg_binding + var_context + logic
 
 // simple mode create function objects during eval
 using FunctionType = std::function<std::shared_ptr<Value>(
     std::list<std::shared_ptr<Value>> const &)>;
-class Function : public Value, public ValueHolder<FunctionType> {
-  using ValueHolder::ValueHolder;
-};
+
+using Function = PintValue<FunctionType>;
+
 class Macro : public Function {
   using Function::Function;
 };
+
+#include <unordered_map>
 
 using Memory = std::unordered_map<std::string, std::shared_ptr<Value>>;
 Memory root;
