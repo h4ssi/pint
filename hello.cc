@@ -60,15 +60,8 @@ public:
     head = std::make_shared<list_elem<T>>(T(std::forward<Args>(args)...), head);
   }
   bool empty() const { return head == nullptr; }
-  T const front() const { return head->value; }
-  T front() {
-    return const_cast<T>(const_cast<list_head<T> const *>(this)->front());
-  }
-  list_head<T> const tail() const { return list_head<T>(head->next); }
-  list_head<T> tail() {
-    return const_cast<list_head<T>>(
-        const_cast<list_head<T> const *>(this)->tail());
-  }
+  T front() const { return head->value; }
+  list_head<T> tail() const { return list_head<T>(head->next); }
   class iterator : public std::iterator<std::forward_iterator_tag, T> {
   public:
     iterator(std::shared_ptr<list_elem<T>> p) noexcept(
@@ -146,6 +139,9 @@ template <typename T> class ValueHolder : private std::tuple<T> {
 public:
   using std::tuple<T>::tuple;
   T const &value() const { return std::get<0>(*this); }
+  T &value() {
+    return const_cast<T &>(const_cast<ValueHolder<T> const *>(this)->value());
+  }
 };
 
 template <class T, unsigned D = 0>
