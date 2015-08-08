@@ -800,13 +800,10 @@ public:
   virtual ~CVal() = default;
 };
 
-template <typename T>
-class DynamicCVal : public CVal, public std::unique_ptr<T> {
+template <typename T> class DynamicCVal : public CVal, private ValueHolder<T> {
 public:
-  template <typename... Args>
-  DynamicCVal(Args &&... t)
-      : std::unique_ptr<T>(std::make_unique<T>(std::forward<Args>(t)...)) {}
-  void *p() override { return static_cast<void *>(this->get()); }
+  using ValueHolder<T>::ValueHolder;
+  void *p() override { return static_cast<void *>(&this->value()); }
 };
 
 std::unique_ptr<CVal> to_val(ffi_type *type, Value *val) {
