@@ -139,16 +139,12 @@ public:
 
 class Expr : public Value {};
 
-template <typename T> class ValueHolder {
-public:
-  ValueHolder() = default;
-  ValueHolder(T const &o) noexcept(noexcept(decltype(v)(o))) : v(o) {}
-  ValueHolder(T &&o) noexcept(noexcept(decltype(v)(std::move(o))))
-      : v(std::move(o)) {}
-  T const &value() const { return v; }
+#include <tuple>
 
-private:
-  T v;
+template <typename T> class ValueHolder : private std::tuple<T> {
+public:
+  using std::tuple<T>::tuple;
+  T const &value() const { return std::get<0>(*this); }
 };
 
 class Number : public Expr, public ValueHolder<double> {
@@ -667,8 +663,6 @@ FunctionType eval_to_f(Memory &pm, List *f) {
     return r;
   };
 }
-
-#include <tuple>
 
 std::shared_ptr<Value>
 c_call(Symbol fn, Symbol ret_type,
