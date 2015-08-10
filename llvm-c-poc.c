@@ -1,5 +1,9 @@
 #include <llvm-c/Core.h>
 #include <llvm-c/Analysis.h>
+#include <llvm-c/Target.h>
+#include <llvm-c/ExecutionEngine.h>
+
+#include <stdio.h>
 
 int main() {
   LLVMContextRef c = LLVMGetGlobalContext();
@@ -14,10 +18,27 @@ int main() {
   LLVMValueRef r =
       LLVMBuildNSWAdd(b, LLVMGetParam(f, 0), LLVMGetParam(f, 1), "");
   LLVMBuildRet(b, r);
-  LLVMVerifyFunction(f, LLVMPrintMessageAction);
-  LLVMVerifyModule(m, LLVMPrintMessageAction, 0);
+  if (LLVMVerifyFunction(f, LLVMPrintMessageAction)) {
+    return 1;
+  }
+  char *err;
+  if (LLVMVerifyModule(m, LLVMPrintMessageAction, &err)) {
+    puts(err);
+    return 2;
+  }
   LLVMDisposeBuilder(b);
 
   LLVMDumpModule(m);
+
+  LLVMLinkInMCJIT();
+  LLVMInitializeNativeTarget();
+  LLVMInitializeNativeAsmPrinter();
+  LLVMExecutionEngineRef ee;
+  if (LLVMCreateJITCompilerForModule(&ee, m, 0, &err)) {
+    puts(err);
+    return 3;
+  }
+  int (*plus)(int, int) = (int (*)(int, int))LLVMGetPointerToGlobal(ee, f);
+  printf("%d\n", plus(3, 4));
   return 0;
 }
