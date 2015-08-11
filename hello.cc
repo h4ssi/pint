@@ -307,6 +307,8 @@ class Macro : public Function {
   using Function::Function;
 };
 
+using CPointer = PintValue<void *>;
+
 #include <unordered_map>
 
 using Memory = std::unordered_map<std::string, std::shared_ptr<Value>>;
@@ -332,6 +334,8 @@ void print(Value const *value) {
     std::cout << ")";
   } else if (dynamic_cast<Function const *>(value)) {
     std::cout << "[Function]";
+  } else if (auto p = dynamic_cast<CPointer const *>(value)) {
+    std::cout << "[CPointer " << p->value() << "]" << std::endl;
   } else {
     std::cout << "[nil]";
   }
@@ -389,6 +393,13 @@ bool eq(std::shared_ptr<Value> const &l, std::shared_ptr<Value> const &r) {
       auto const &lll = ll->value();
       auto const &llr = lr->value();
       return std::equal(begin(lll), end(lll), begin(llr), end(llr), eq);
+    }
+    return false;
+  }
+
+  if (auto pl = dynamic_cast<CPointer *>(l.get())) {
+    if (auto pr = dynamic_cast<CPointer *>(l.get())) {
+      return pl->value() == pr->value();
     }
     return false;
   }
@@ -811,6 +822,9 @@ std::unique_ptr<CVal> to_val(ffi_type *type, Value *val) {
     if (auto t = dynamic_cast<Text *>(val)) {
       return std::make_unique<DynamicCVal<const char *>>(t->value().c_str());
     }
+    if (auto p = dynamic_cast<CPointer *>(val)) {
+      return std::make_unique<DynamicCVal<void *>>(p->value());
+    }
   } else {
     if (auto n = dynamic_cast<Number *>(val)) {
       return std::make_unique<DynamicCVal<int>>(n->value());
@@ -822,6 +836,8 @@ std::unique_ptr<CVal> to_val(ffi_type *type, Value *val) {
 std::shared_ptr<Value> from_val(ffi_type *type, void *ret) {
   if (type == &ffi_type_void) {
     return nullptr;
+  } else if (type == &ffi_type_pointer) {
+    return std::make_shared<CPointer>(*static_cast<void **>(ret));
   } else {
     return std::make_shared<Number>(
         static_cast<double>(*static_cast<ffi_sarg *>(ret)));

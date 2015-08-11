@@ -95,6 +95,9 @@
 (test (= (substr 'asdf' 2 0) '') 'substr grep 0 length')
 (test (= (substr 'asdf' 2 20) 'df') 'substr grep beyond length')
 
+; todo better tests for c pointers
+(print (c-call strdup * * 'dup this'))
+
 (print (str 'tests: ' num-tests))
 
 failed-tests
