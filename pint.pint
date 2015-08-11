@@ -1,4 +1,7 @@
 
+(def c (c-call LLVMGetGlobalContext *))
+(print c)
+
 (def to-list
   (fn (string)
 
