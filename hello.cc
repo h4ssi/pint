@@ -864,6 +864,7 @@ c_call(Symbol fn, Symbol ret_type,
     types[i] = to_type(std::get<0>(arg).value());
     val_refs.emplace_front(to_val(types[i], std::get<1>(arg).get()));
     vals[i] = val_refs.front()->p();
+    ++i;
   }
   ffi_status st = ffi_prep_cif(&cif, FFI_DEFAULT_ABI, args.size(), return_type,
                                types.get());

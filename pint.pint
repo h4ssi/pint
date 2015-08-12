@@ -1,6 +1,7 @@
 
 (def c (c-call LLVMGetGlobalContext *))
-(print c)
+(def m (c-call LLVMModuleCreateWithNameInContext * * 'test' * c))
+(c-call LLVMDumpModule void * m)
 
 (def to-list
   (fn (string)
