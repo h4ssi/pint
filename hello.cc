@@ -144,7 +144,7 @@ public:
   }
 };
 
-template <class T, unsigned D = 0>
+template <typename T, unsigned D = 0>
 class PintExpr : public Expr, public ValueHolder<T> {
   using ValueHolder<T>::ValueHolder;
 };
@@ -291,7 +291,7 @@ ParseResult parse_expr(std::string const &s, std::size_t pos) {
   }
 }
 
-template <class T> class PintValue : public Value, public ValueHolder<T> {
+template <typename T> class PintValue : public Value, public ValueHolder<T> {
   using ValueHolder<T>::ValueHolder;
 };
 
@@ -307,7 +307,31 @@ class Macro : public Function {
   using Function::Function;
 };
 
-using CPointer = PintValue<void *>;
+class CPointer : public Value {
+public:
+  virtual void const *value() const = 0;
+  virtual void *value() = 0;
+};
+
+class CStaticPointer : public CPointer {
+public:
+  CStaticPointer(void *p) : p_(p) {}
+  void const *value() const override { return p_; }
+  void *value() override { return p_; }
+
+private:
+  void *p_;
+};
+
+template <typename T> class CArray : public CPointer {
+public:
+  CArray(std::unique_ptr<T[]> p) : p_(std::move(p)) {}
+  void const *value() const override { return p_.get(); }
+  void *value() override { return p_.get(); }
+
+private:
+  std::unique_ptr<T[]> p_;
+};
 
 #include <unordered_map>
 
@@ -565,6 +589,22 @@ void setup() {
           p = &v;
         }
         return p == nullptr ? std::make_shared<Text>("") : *p;
+      });
+  root["c-array"] =
+      std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
+        auto p = std::make_unique<void *[]>(l.size());
+
+        std::size_t i = 0;
+        for (auto const &e : l) {
+          if (auto pp = dynamic_cast<CPointer *>(e.get())) {
+            p[i] = pp->value();
+          } else {
+            p[i] = nullptr;
+          }
+          ++i;
+        }
+
+        return std::make_shared<CArray<void *>>(std::move(p));
       });
 }
 
@@ -837,7 +877,7 @@ std::shared_ptr<Value> from_val(ffi_type *type, void *ret) {
   if (type == &ffi_type_void) {
     return nullptr;
   } else if (type == &ffi_type_pointer) {
-    return std::make_shared<CPointer>(*static_cast<void **>(ret));
+    return std::make_shared<CStaticPointer>(*static_cast<void **>(ret));
   } else {
     return std::make_shared<Number>(
         static_cast<double>(*static_cast<ffi_sarg *>(ret)));
