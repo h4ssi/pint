@@ -1,6 +1,17 @@
 
 (def c (c-call LLVMGetGlobalContext *))
 (def m (c-call LLVMModuleCreateWithNameInContext * * 'test' * c))
+(def i (c-call LLVMInt32TypeInContext * * c))
+(def ps (c-array i i))
+(def ft (c-call LLVMFunctionType * * i * ps int 2 int 0))
+(def f (c-call LLVMAddFunction * * m * 'plus' * ft))
+(def bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'entry'))
+(def b (c-call LLVMCreateBuilder *))
+(c-call LLVMPositionBuilderAtEnd void * b * bb)
+(def r (c-call LLVMBuildNSWAdd * * b * (c-call LLVMGetParam * * f int 0) * (c-call LLVMGetParam * * f int 1) * ''))
+(c-call LLVMBuildRet void * b * r)
+(c-call LLVMDisposeBuilder void * b)
+
 (c-call LLVMDumpModule void * m)
 
 (def to-list
