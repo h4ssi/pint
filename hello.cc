@@ -926,7 +926,7 @@ c_call(Symbol fn, Symbol ret_type,
        std::list<std::tuple<Symbol, std::shared_ptr<Value>>> args) {
   void *fp = dl.get(fn.value());
   if (fp == nullptr) {
-    std::cerr << "no such c func" << std::endl;
+    std::cerr << "no such c func: " << fn.value() << std::endl;
     return nullptr;
   }
 
@@ -958,7 +958,7 @@ c_call(Symbol fn, Symbol ret_type,
 std::shared_ptr<Value> c_val(Symbol vr, Symbol ret_type) {
   void *vp = dl.get(vr.value());
   if (vp == nullptr) {
-    std::cerr << "no such c val" << std::endl;
+    std::cerr << "no such c val: " << vr.value() << std::endl;
     return nullptr;
   }
 
