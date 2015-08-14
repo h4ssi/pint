@@ -14,6 +14,16 @@
 
 (c-call LLVMDumpModule void * m)
 
+(def ee (c-ref))
+(def err (c-ref))
+
+(if (= 0 (c-call LLVMCreateJITCompilerForModule int * (c-ref ee) * m int 0 * (c-ref err)))
+    (def noop nil)
+    (print (c-str err)))
+
+(print '
+')
+
 (def to-list
   (fn (string)
 

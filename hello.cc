@@ -311,6 +311,7 @@ class CPointer : public Value {
 public:
   virtual void const *value() const = 0;
   virtual void *value() = 0;
+  virtual void *addr() const = 0;
 };
 
 class CStaticPointer : public CPointer {
@@ -318,6 +319,9 @@ public:
   CStaticPointer(void *p) : p_(p) {}
   void const *value() const override { return p_; }
   void *value() override { return p_; }
+  void *addr() const override {
+    return static_cast<void *>(const_cast<void **>(&p_));
+  }
 
 private:
   void *p_;
@@ -328,6 +332,7 @@ public:
   CArray(std::unique_ptr<T[]> p) : p_(std::move(p)) {}
   void const *value() const override { return p_.get(); }
   void *value() override { return p_.get(); }
+  void *addr() const override { return p_.get(); }
 
 private:
   std::unique_ptr<T[]> p_;
@@ -615,6 +620,16 @@ void setup() {
           break;
         }
         return nullptr;
+      });
+  root["c-ref"] =
+      std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
+        for (auto const &e : l) {
+          if (auto p = dynamic_cast<CPointer *>(e.get())) {
+            return std::make_shared<CStaticPointer>(p->addr());
+          }
+          break;
+        }
+        return std::make_shared<CStaticPointer>(nullptr);
       });
 }
 
