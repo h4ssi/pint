@@ -737,6 +737,7 @@ FunctionType eval_to_f(Memory &pm, List *f) {
 std::shared_ptr<Value>
 c_call(Symbol fn, Symbol ret_type,
        std::list<std::tuple<Symbol, std::shared_ptr<Value>>> args);
+std::shared_ptr<Value> c_val(Symbol fn, Symbol ret_type);
 
 std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> expr) {
   if (auto var = dynamic_cast<Symbol *>(expr.get())) {
@@ -813,6 +814,19 @@ std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> expr) {
         }
         return nullptr;
       }
+      if ("c-val" == s->value()) {
+        if (++i != e) {
+
+          if (auto vr = dynamic_cast<Symbol *>(i->get())) {
+            if (++i != e) {
+              if (auto ret_type = dynamic_cast<Symbol *>(i->get())) {
+                return c_val(*vr, *ret_type);
+              }
+            }
+          }
+        }
+        return nullptr;
+      }
     }
     auto head = eval(m, *i);
     if (Macro *c = dynamic_cast<Macro *>(head.get())) {
@@ -845,9 +859,7 @@ public:
   Dl(Dl const &) = delete;
   Dl &operator=(Dl const &) = delete;
   bool valid() const { return dl_handle != nullptr; }
-  void *function(std::string name) const {
-    return dlsym(dl_handle, name.c_str());
-  }
+  void *get(std::string name) const { return dlsym(dl_handle, name.c_str()); }
   ~Dl() {
     if (dl_handle != nullptr) {
       dlclose(dl_handle);
@@ -912,7 +924,7 @@ std::shared_ptr<Value> from_val(ffi_type *type, void *ret) {
 std::shared_ptr<Value>
 c_call(Symbol fn, Symbol ret_type,
        std::list<std::tuple<Symbol, std::shared_ptr<Value>>> args) {
-  void *fp = dl.function(fn.value());
+  void *fp = dl.get(fn.value());
   if (fp == nullptr) {
     std::cerr << "no such c func" << std::endl;
     return nullptr;
@@ -940,6 +952,19 @@ c_call(Symbol fn, Symbol ret_type,
   ffi_sarg frs;
   ffi_call(&cif, (void (*)())fp, &frs, vals.get());
 
+  return from_val(return_type, &frs);
+}
+
+std::shared_ptr<Value> c_val(Symbol vr, Symbol ret_type) {
+  void *vp = dl.get(vr.value());
+  if (vp == nullptr) {
+    std::cerr << "no such c val" << std::endl;
+    return nullptr;
+  }
+
+  auto return_type = to_type(ret_type.value());
+
+  ffi_sarg frs = *static_cast<ffi_sarg *>(vp);
   return from_val(return_type, &frs);
 }
 

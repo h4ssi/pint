@@ -98,6 +98,7 @@
 ; todo better tests for c pointers
 (print (c-call strdup * * 'dup this'))
 (test (= (c-str (c-call strdup * * 'hiho')) 'hiho') 'conversion to and from c-str')
+(test (= (c-str (c-val program_invocation_short_name *)) 'hello') 'read global c-var')
 
 (print (str 'tests: ' num-tests))
 
