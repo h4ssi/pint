@@ -10,16 +10,38 @@
 (c-call LLVMPositionBuilderAtEnd void * b * bb)
 (def r (c-call LLVMBuildNSWAdd * * b * (c-call LLVMGetParam * * f int 0) * (c-call LLVMGetParam * * f int 1) * ''))
 (c-call LLVMBuildRet void * b * r)
+
+(def LLVMAbortProcessAction 0)
+(def LLVMPrintMessageAction 1)
+(def LLVMReturnStatusAction 2)
+
+(if (= 0 (c-call LLVMVerifyFunction int * f int LLVMPrintMessageAction))
+    nil
+    (print 'error verifying function'))
+
+(def err (c-ref))
+
+(if (= 0 (c-call LLVMVerifyModule int * m int LLVMPrintMessageAction * (c-ref err)))
+    nil
+    (print (c-str err)))
+
 (c-call LLVMDisposeBuilder void * b)
 
 (c-call LLVMDumpModule void * m)
 
+(c-call LLVMLinkInMCJIT void)
+(c-call ExternLLVMInitializeNativeTarget void) ; todo inlining does not work :(
+(c-call ExternLLVMInitializeNativeAsmPrinter void) 
+
 (def ee (c-ref))
-(def err (c-ref))
 
 (if (= 0 (c-call LLVMCreateJITCompilerForModule int * (c-ref ee) * m int 0 * (c-ref err)))
-    (def noop nil)
+    nil
     (print (c-str err)))
+
+(def plus (c-call LLVMGetPointerToGlobal * * ee * f))
+
+(print plus) ; todo call plus!
 
 (print '
 ')
