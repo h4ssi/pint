@@ -97,6 +97,7 @@
 
 ; todo better tests for c pointers
 (print (c-call strdup * * 'dup this'))
+(test (= (c-str (c-call strdup * * 'hiho')) 'hiho') 'conversion to and from c-str')
 
 (print (str 'tests: ' num-tests))
 

@@ -606,6 +606,16 @@ void setup() {
 
         return std::make_shared<CArray<void *>>(std::move(p));
       });
+  root["c-str"] =
+      std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
+        for (auto const &e : l) {
+          if (auto p = dynamic_cast<CPointer *>(e.get())) {
+            return std::make_shared<Text>(static_cast<char *>(p->value()));
+          }
+          break;
+        }
+        return nullptr;
+      });
 }
 
 #include <unordered_set>
