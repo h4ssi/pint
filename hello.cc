@@ -734,122 +734,6 @@ FunctionType eval_to_f(Memory &pm, List *f) {
   };
 }
 
-std::shared_ptr<Value>
-c_call(Symbol fn, Symbol ret_type,
-       std::list<std::tuple<Symbol, std::shared_ptr<Value>>> args);
-std::shared_ptr<Value> c_val(Symbol fn, Symbol ret_type);
-
-std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> expr) {
-  if (auto var = dynamic_cast<Symbol *>(expr.get())) {
-    return m[var->value()];
-  } else if (auto l = dynamic_cast<List *>(expr.get())) {
-    if (l->value().empty()) {
-      return std::make_shared<List>(); // empty form
-    }
-    auto const &list = l->value();
-    auto i = begin(list);
-    auto e = end(list);
-    if (auto s = dynamic_cast<Symbol *>(i->get())) {
-      if ("do" == s->value()) {
-        std::shared_ptr<Value> r;
-        while (++i != e) {
-          r = eval(m, *i);
-        }
-        return r;
-      }
-      if ("def" == s->value()) {
-        if (++i != e) {
-          if (auto t = dynamic_cast<Symbol *>(i->get())) {
-            if (++i != e) {
-              return (m[t->value()] = eval(m, *i));
-            }
-          }
-        }
-        return nullptr;
-      }
-      if ("fn" == s->value()) {
-        return std::make_shared<Function>(eval_to_f(m, l));
-      }
-      if ("macro" == s->value()) {
-        return std::make_shared<Macro>(eval_to_f(m, l));
-      }
-      if ("if" == s->value()) {
-        if (++i != e) {
-          auto cond = eval(m, *i);
-          if (++i != e) {
-            if (cond != nullptr) {
-              return eval(m, *i);
-            } else if (++i != e) {
-              return eval(m, *i);
-            }
-          }
-        }
-        return nullptr;
-      }
-      if ("quote" == s->value()) {
-        if (++i != e) {
-          return *i;
-        }
-        return nullptr;
-      }
-      if ("c-call" == s->value()) {
-        if (++i != e) {
-          if (auto fn = dynamic_cast<Symbol *>(i->get())) {
-            if (++i != e) {
-              if (auto ret_type = dynamic_cast<Symbol *>(i->get())) {
-                std::list<std::tuple<Symbol, std::shared_ptr<Value>>> args;
-                while (++i != e) {
-                  if (auto arg_type = dynamic_cast<Symbol *>(i->get())) {
-                    if (++i != e) {
-                      if (auto arg = eval(m, *i)) {
-                        args.emplace_back(std::make_tuple(*arg_type, arg));
-                      }
-                    }
-                  }
-                }
-                return c_call(*fn, *ret_type, args);
-              }
-            }
-          }
-        }
-        return nullptr;
-      }
-      if ("c-val" == s->value()) {
-        if (++i != e) {
-
-          if (auto vr = dynamic_cast<Symbol *>(i->get())) {
-            if (++i != e) {
-              if (auto ret_type = dynamic_cast<Symbol *>(i->get())) {
-                return c_val(*vr, *ret_type);
-              }
-            }
-          }
-        }
-        return nullptr;
-      }
-    }
-    auto head = eval(m, *i);
-    if (Macro *c = dynamic_cast<Macro *>(head.get())) {
-      std::list<std::shared_ptr<Value>> args;
-      while (++i != e) {
-        args.emplace_back(*i);
-      }
-      return eval(m, (c->value())(args));
-    }
-    if (Function *f = dynamic_cast<Function *>(head.get())) {
-      std::list<std::shared_ptr<Value>> args;
-      while (++i != e) {
-        args.emplace_back(eval(m, *i));
-      }
-      return (f->value())(args);
-    }
-    return nullptr;
-  } else {
-    return expr;
-  }
-}
-
-#include <fstream>
 #include <dlfcn.h>
 #include <ffi.h>
 
@@ -967,6 +851,118 @@ std::shared_ptr<Value> c_val(Symbol vr, Symbol ret_type) {
   ffi_sarg frs = *static_cast<ffi_sarg *>(vp);
   return from_val(return_type, &frs);
 }
+
+std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> expr) {
+  if (auto var = dynamic_cast<Symbol *>(expr.get())) {
+    return m[var->value()];
+  } else if (auto l = dynamic_cast<List *>(expr.get())) {
+    if (l->value().empty()) {
+      return std::make_shared<List>(); // empty form
+    }
+    auto const &list = l->value();
+    auto i = begin(list);
+    auto e = end(list);
+    if (auto s = dynamic_cast<Symbol *>(i->get())) {
+      if ("do" == s->value()) {
+        std::shared_ptr<Value> r;
+        while (++i != e) {
+          r = eval(m, *i);
+        }
+        return r;
+      }
+      if ("def" == s->value()) {
+        if (++i != e) {
+          if (auto t = dynamic_cast<Symbol *>(i->get())) {
+            if (++i != e) {
+              return (m[t->value()] = eval(m, *i));
+            }
+          }
+        }
+        return nullptr;
+      }
+      if ("fn" == s->value()) {
+        return std::make_shared<Function>(eval_to_f(m, l));
+      }
+      if ("macro" == s->value()) {
+        return std::make_shared<Macro>(eval_to_f(m, l));
+      }
+      if ("if" == s->value()) {
+        if (++i != e) {
+          auto cond = eval(m, *i);
+          if (++i != e) {
+            if (cond != nullptr) {
+              return eval(m, *i);
+            } else if (++i != e) {
+              return eval(m, *i);
+            }
+          }
+        }
+        return nullptr;
+      }
+      if ("quote" == s->value()) {
+        if (++i != e) {
+          return *i;
+        }
+        return nullptr;
+      }
+      if ("c-call" == s->value()) {
+        if (++i != e) {
+          if (auto fn = dynamic_cast<Symbol *>(i->get())) {
+            if (++i != e) {
+              if (auto ret_type = dynamic_cast<Symbol *>(i->get())) {
+                std::list<std::tuple<Symbol, std::shared_ptr<Value>>> args;
+                while (++i != e) {
+                  if (auto arg_type = dynamic_cast<Symbol *>(i->get())) {
+                    if (++i != e) {
+                      if (auto arg = eval(m, *i)) {
+                        args.emplace_back(std::make_tuple(*arg_type, arg));
+                      }
+                    }
+                  }
+                }
+                return c_call(*fn, *ret_type, args);
+              }
+            }
+          }
+        }
+        return nullptr;
+      }
+      if ("c-val" == s->value()) {
+        if (++i != e) {
+
+          if (auto vr = dynamic_cast<Symbol *>(i->get())) {
+            if (++i != e) {
+              if (auto ret_type = dynamic_cast<Symbol *>(i->get())) {
+                return c_val(*vr, *ret_type);
+              }
+            }
+          }
+        }
+        return nullptr;
+      }
+    }
+    auto head = eval(m, *i);
+    if (Macro *c = dynamic_cast<Macro *>(head.get())) {
+      std::list<std::shared_ptr<Value>> args;
+      while (++i != e) {
+        args.emplace_back(*i);
+      }
+      return eval(m, (c->value())(args));
+    }
+    if (Function *f = dynamic_cast<Function *>(head.get())) {
+      std::list<std::shared_ptr<Value>> args;
+      while (++i != e) {
+        args.emplace_back(eval(m, *i));
+      }
+      return (f->value())(args);
+    }
+    return nullptr;
+  } else {
+    return expr;
+  }
+}
+
+#include <fstream>
 
 int main(int argc, char **argv) {
   if (!dl.valid()) {
