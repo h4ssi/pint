@@ -806,14 +806,8 @@ std::shared_ptr<Value> from_val(ffi_type *type, void *ret) {
 }
 
 std::shared_ptr<Value>
-c_call(Symbol fn, Symbol ret_type,
+c_call(void *fp, Symbol ret_type,
        std::list<std::tuple<Symbol, std::shared_ptr<Value>>> args) {
-  void *fp = dl.get(fn.value());
-  if (fp == nullptr) {
-    std::cerr << "no such c func: " << fn.value() << std::endl;
-    return nullptr;
-  }
-
   ffi_cif cif;
   auto types = std::make_unique<ffi_type *[]>(args.size());
   auto vals = std::make_unique<void *[]>(args.size());
@@ -839,13 +833,7 @@ c_call(Symbol fn, Symbol ret_type,
   return from_val(return_type, &frs);
 }
 
-std::shared_ptr<Value> c_val(Symbol vr, Symbol ret_type) {
-  void *vp = dl.get(vr.value());
-  if (vp == nullptr) {
-    std::cerr << "no such c val: " << vr.value() << std::endl;
-    return nullptr;
-  }
-
+std::shared_ptr<Value> c_val(void *vp, Symbol ret_type) {
   auto return_type = to_type(ret_type.value());
 
   ffi_sarg frs = *static_cast<ffi_sarg *>(vp);
@@ -908,6 +896,11 @@ std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> expr) {
       if ("c-call" == s->value()) {
         if (++i != e) {
           if (auto fn = dynamic_cast<Symbol *>(i->get())) {
+            void *fp = dl.get(fn->value());
+            if (fp == nullptr) {
+              std::cerr << "no such c func: " << fn->value() << std::endl;
+              return nullptr;
+            }
             if (++i != e) {
               if (auto ret_type = dynamic_cast<Symbol *>(i->get())) {
                 std::list<std::tuple<Symbol, std::shared_ptr<Value>>> args;
@@ -920,7 +913,7 @@ std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> expr) {
                     }
                   }
                 }
-                return c_call(*fn, *ret_type, args);
+                return c_call(fp, *ret_type, args);
               }
             }
           }
@@ -929,11 +922,16 @@ std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> expr) {
       }
       if ("c-val" == s->value()) {
         if (++i != e) {
-
           if (auto vr = dynamic_cast<Symbol *>(i->get())) {
+            void *vp = dl.get(vr->value());
+            if (vp == nullptr) {
+              std::cerr << "no such c val: " << vr->value() << std::endl;
+              return nullptr;
+            }
+
             if (++i != e) {
               if (auto ret_type = dynamic_cast<Symbol *>(i->get())) {
-                return c_val(*vr, *ret_type);
+                return c_val(vp, *ret_type);
               }
             }
           }
