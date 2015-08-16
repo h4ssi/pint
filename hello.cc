@@ -896,10 +896,24 @@ std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> expr) {
       if ("c-call" == s->value()) {
         if (++i != e) {
           if (auto fn = dynamic_cast<Symbol *>(i->get())) {
-            void *fp = dl.get(fn->value());
-            if (fp == nullptr) {
-              std::cerr << "no such c func: " << fn->value() << std::endl;
-              return nullptr;
+            void *fp = nullptr;
+            if (fn->value() == "*") { // func pointer
+              if (++i != e) {
+                auto fp_v = eval(m, *i);
+                if (auto fp_w = dynamic_cast<CPointer *>(fp_v.get())) {
+                  fp = fp_w->value();
+                }
+              }
+              if (fp == nullptr) {
+                std::cerr << "unable to get c func ptr" << std::endl;
+                return nullptr;
+              }
+            } else {
+              fp = dl.get(fn->value());
+              if (fp == nullptr) {
+                std::cerr << "no such c func: " << fn->value() << std::endl;
+                return nullptr;
+              }
             }
             if (++i != e) {
               if (auto ret_type = dynamic_cast<Symbol *>(i->get())) {

@@ -57,7 +57,9 @@
 
 (def plus (c-call LLVMGetPointerToGlobal * * ee * f))
 
-(print plus) ; todo call plus!
+(print 'calling ' plus)
+
+(print '3 + 4 = ' (c-call * plus int int 3 int 4))
 
 (print '
 ')
