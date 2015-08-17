@@ -172,6 +172,27 @@
 
     (take-while^ l take-while^)))
 
+(def assoc 
+ (fn (m k v)
+  (cons k (cons v m))))
+
+(def getk
+ (fn (m k)
+   (def getk^
+     (fn (mm rec)
+       (if (empty? mm)
+         nil
+         (if (= k (head mm))
+            (head (tail mm))
+            (rec (tail (tail mm)) rec)))))
+
+   (getk^ m getk^)))
+
+(print (getk () 'test') newline) ; should be nil
+(def testmap (assoc (assoc (assoc () 'a' 1) 'b' 2) 'a' 3))
+(print (getk testmap 'a') newline) ; should be 3
+(print (getk testmap 'b') newline) ; should be 2
+
 (def pair
   (fn (l r)
     (cons l (cons r))))
