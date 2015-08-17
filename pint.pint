@@ -82,7 +82,6 @@
 (def whitespace (str ' 	' newline))
 (def digit '0123456789')
 
-(def nil (cons))
 (def nil? (fn (w) (if w nil '')))
 (def not  (fn (c) (if c nil '')))
 
