@@ -14,6 +14,8 @@
 
 (def not (fn (c) (if c nil '')))
 
+(def newline '
+')
 (def test (macro (cond descr)
            (cons (quote do)
            (cons (cons (quote def) (cons (quote num-tests) (cons (cons (quote +) (cons (quote num-tests) (cons 1))))))
@@ -22,7 +24,7 @@
              (cons cond
              (cons nil
              (cons (cons (quote do)
-                   (cons (cons (quote print) (cons descr))
+                   (cons (cons (quote print) (cons '[F] ' (cons descr (cons newline))))
                    (cons (cons (quote def) (cons (quote failed-tests) (cons (cons (quote +) (cons (quote failed-tests) (cons 1))))))
              ))))))))))))
 
