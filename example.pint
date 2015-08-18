@@ -106,6 +106,8 @@
 (def is-number (fn (o) (= o (+ o))))
 
 (def c-test-val (c-val program_invocation_short_name *))
+(test (not (= c-test-val 'any value')) 'bug where c-ptr broke =')
+
 (test (is-number 7) '7 is a number')
 (test (not (is-number '7')) '\'7\' is not a number')
 (test (not (is-number (symbol '7'))) 'symbol \'7\' is not a number')

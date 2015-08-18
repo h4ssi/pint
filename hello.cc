@@ -427,7 +427,7 @@ bool eq(std::shared_ptr<Value> const &l, std::shared_ptr<Value> const &r) {
   }
 
   if (auto pl = dynamic_cast<CPointer *>(l.get())) {
-    if (auto pr = dynamic_cast<CPointer *>(l.get())) {
+    if (auto pr = dynamic_cast<CPointer *>(r.get())) {
       return pl->value() == pr->value();
     }
     return false;
