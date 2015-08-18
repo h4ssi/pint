@@ -100,6 +100,16 @@
 (test (= (c-str (c-call strdup * * 'hiho')) 'hiho') 'conversion to and from c-str')
 (test (= (c-str (c-val program_invocation_short_name *)) 'hello') 'read global c-var')
 
+
+(def is-number (fn (o) (= o (+ o))))
+
+(def c-test-val (c-val program_invocation_short_name *))
+(test (is-number 7) '7 is a number')
+(test (not (is-number '7')) '\'7\' is not a number')
+(test (not (is-number (symbol '7'))) 'symbol \'7\' is not a number')
+(test (not (is-number (cons 7))) '(7) is not a number')
+(test (not (is-number c-test-val)) 'c value is not a number')
+
 (print (str 'tests: ' num-tests))
 
 failed-tests
