@@ -108,6 +108,7 @@
 (def c-test-val (c-val program_invocation_short_name *))
 (test (not (= c-test-val 'any value')) 'bug where c-ptr broke =')
 
+(test (not (is-number nil)) 'nil is not a number')
 (test (is-number 7) '7 is a number')
 (test (not (is-number '7')) '\'7\' is not a number')
 (test (not (is-number (symbol '7'))) 'symbol \'7\' is not a number')
@@ -116,6 +117,7 @@
 
 (def is-string (fn (o) (= o (str o))))
 
+(test (not (is-string nil)) 'nil is not a string')
 (test (not (is-string 7)) '7 is not a string')
 (test (is-string '7') '\'7\' is a string')
 (test (not (is-string (symbol '7'))) 'symbol \'7\' is not a string')
@@ -124,6 +126,7 @@
 
 (def is-symbol (fn (o) (= o (symbol (symbol-name o)))))
 
+(test (not (is-symbol nil)) 'nil is not a symbol')
 (test (not (is-symbol 7)) '7 is not a symbol')
 (test (not (is-symbol '7')) '\'7\' is not a symbol')
 (test (is-symbol (symbol '7')) 'symbol \'7\' is a symbol')
