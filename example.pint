@@ -114,6 +114,14 @@
 (test (not (is-number (cons 7))) '(7) is not a number')
 (test (not (is-number c-test-val)) 'c value is not a number')
 
+(def is-string (fn (o) (= o (str o))))
+
+(test (not (is-string 7)) '7 is not a string')
+(test (is-string '7') '\'7\' is a string')
+(test (not (is-string (symbol '7'))) 'symbol \'7\' is not a string')
+(test (not (is-string (cons 7))) '(7) is not a string')
+(test (not (is-string c-test-val)) 'c value is not a string')
+
 (print (str 'tests: ' num-tests))
 
 failed-tests
