@@ -115,6 +115,7 @@
 (test (not (is-number (cons 7))) '(7) is not a number')
 (test (not (is-number ())) '() is not a number')
 (test (not (is-number c-test-val)) 'c value is not a number')
+(test (not (is-number print)) '(print ...) is not a number')
 
 (def is-string (fn (o) (= o (str o))))
 
@@ -125,6 +126,7 @@
 (test (not (is-string (cons 7))) '(7) is not a string')
 (test (not (is-string ())) '() is not a string')
 (test (not (is-string c-test-val)) 'c value is not a string')
+(test (not (is-string print)) '(print ...) is not a string')
 
 (def is-symbol (fn (o) (= o (symbol (symbol-name o)))))
 
@@ -135,6 +137,7 @@
 (test (not (is-symbol (cons 7))) '(7) is not a symbol')
 (test (not (is-symbol ())) '() is not a symbol')
 (test (not (is-symbol c-test-val)) 'c value is not a symbol')
+(test (not (is-symbol print)) '(print ...) is not a symbol')
 
 (def is-list (fn (o) (if (= o ()) o (tail o))))
 
@@ -145,6 +148,18 @@
 (test (is-list (cons 7)) '(7) is a list')
 (test (is-list ()) '() is a list')
 (test (not (is-list c-test-val)) 'c value is not a list')
+(test (not (is-list print)) '(print ...) is not a list')
+
+(def is-fn (fn (o) (if o (not (= o o)) o)))
+
+(test (not (is-fn nil)) 'nil is not a fn')
+(test (not (is-fn 7)) '7 is not a fn')
+(test (not (is-fn '7')) '\'7\' is not a fn')
+(test (not (is-fn (symbol '7'))) 'symbol \'7\' is not a fn')
+(test (not (is-fn (cons 7))) '(7) is not a fn')
+(test (not (is-fn ())) '() is not a fn')
+(test (not (is-fn c-test-val)) 'c value is not a fn')
+(test (is-fn print) '(print ...) is not a fn')
 
 (print (str 'tests: ' num-tests))
 
