@@ -326,5 +326,61 @@
     )
     )(parse-expr cs parse-expr))))
 
+(def code (parse-all (to-list INPUT) parse-all))
 
-(print (parse-all (to-list INPUT) parse-all))
+(print code)
+
+(def is-number (fn (o) (= o (+ o))))
+(def is-string (fn (o) (= o (str o))))
+(def is-symbol (fn (o) (= o (symbol (symbol-name o)))))
+(def is-list (fn (o) (if (= o ()) o (tail o))))
+(def is-fn (fn (o) (if o (not (= o o)) o)))
+
+(def c (c-call LLVMGetGlobalContext *))
+(def m (c-call LLVMModuleCreateWithNameInContext * * 'real' * c))
+(def ptr-type (c-call LLVMInt32TypeInContext * * c))
+
+(def tr-form
+ (fn (form)
+   (if (= (symbol 'def') (head form))
+     (do
+       (c-call LLVMAddGlobal * * m * ptr-type * (symbol-name (head (tail form))))
+     )
+     nil
+   )
+))
+
+(def tr
+  (fn (c)
+    
+    (def tr^ (fn (c rec)
+      (if (empty? c)
+       c
+       ((fn (h t)
+         (if (is-list h)
+           (tr-form h)
+           nil) ; todo other options
+         (rec t rec)
+       ) (head c) (tail c)))))
+
+    (tr^ c tr^)
+  ))
+
+(tr code)
+
+(def LLVMAbortProcessAction 0)
+(def LLVMPrintMessageAction 1)
+(def LLVMReturnStatusAction 2)
+
+(def err (c-ref))
+
+(if (= 0 (c-call LLVMVerifyModule int * m int LLVMPrintMessageAction * (c-ref err)))
+    nil
+    (print (c-str err)))
+
+(c-call LLVMDisposeBuilder void * b)
+
+(print '
+')
+(c-call LLVMDumpModule void * m)
+
