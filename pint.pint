@@ -341,29 +341,34 @@
 (def ptr-type (c-call LLVMInt32TypeInContext * * c))
 
 (def tr-form
- (fn (form)
+ (fn (form state)
    (if (= (symbol 'def') (head form))
      (do
-       (c-call LLVMAddGlobal * * m * ptr-type * (symbol-name (head (tail form))))
-     )
-     nil
+       (def name (head (tail form)))
+       (if (getk state name)
+          state
+          (do
+            (c-call LLVMAddGlobal * * m * ptr-type * (symbol-name (head (tail form))))
+            (assoc state name ''))))
+     state
    )
 ))
 
 (def tr
   (fn (c)
     
-    (def tr^ (fn (c rec)
+    (def tr^ (fn (c state rec)
       (if (empty? c)
-       c
+       state
        ((fn (h t)
-         (if (is-list h)
-           (tr-form h)
-           nil) ; todo other options
-         (rec t rec)
+         (def state
+            (if (is-list h)
+             (tr-form h state)
+             state)) ; todo other options
+         (rec t state rec)
        ) (head c) (tail c)))))
 
-    (tr^ c tr^)
+    (tr^ c () tr^)
   ))
 
 (tr code)
