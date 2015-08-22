@@ -339,6 +339,14 @@
 (def c (c-call LLVMGetGlobalContext *))
 (def m (c-call LLVMModuleCreateWithNameInContext * * 'real' * c))
 (def ptr-type (c-call LLVMInt32TypeInContext * * c))
+(def void-type (c-call LLVMVoidTypeInContext * * c))
+
+(def main-f-type (c-call LLVMFunctionType * * void-type * (c-array) int 0 int 0))
+(def main-f (c-call LLVMAddFunction * * m * 'start' * main-f-type))
+(def main-bb (c-call LLVMAppendBasicBlockInContext * * c * main-f * 'entry'))
+(def main-b (c-call LLVMCreateBuilder *))
+(c-call LLVMPositionBuilderAtEnd void * main-b * main-bb)
+;(def r (c-call LLVMBuildNSWAdd * * b * (c-call LLVMGetParam * * f int 0) * (c-call LLVMGetParam * * f int 1) * ''))
 
 (def tr-form
  (fn (form state)
@@ -348,8 +356,9 @@
        (if (getk state name)
           state
           (do
-            (c-call LLVMAddGlobal * * m * ptr-type * (symbol-name (head (tail form))))
-            (assoc state name ''))))
+            (def gl-var (c-call LLVMAddGlobal * * m * ptr-type * (symbol-name (head (tail form)))))
+            (c-call LLVMBuildStore * * main-b * gl-var * (c-call LLVMConstInt * * ptr-type int 0 int 1))
+            (assoc state name gl-var))))
      state
    )
 ))
@@ -373,6 +382,8 @@
 
 (tr code)
 
+(c-call LLVMBuildRetVoid * * main-b)
+
 (def LLVMAbortProcessAction 0)
 (def LLVMPrintMessageAction 1)
 (def LLVMReturnStatusAction 2)
@@ -383,7 +394,7 @@
     nil
     (print (c-str err)))
 
-(c-call LLVMDisposeBuilder void * b)
+(c-call LLVMDisposeBuilder void * main-b)
 
 (print '
 ')
