@@ -338,6 +338,10 @@
 
 (def c (c-call LLVMGetGlobalContext *))
 (def m (c-call LLVMModuleCreateWithNameInContext * * 'real' * c))
+(def int-type (c-call LLVMInt64TypeInContext * * c))
+(def num-type (c-call LLVMDoubleTypeInContext * * c))
+(def value-type (c-call LLVMStructCreateNamed * * c * 'value_type'))
+(c-call LLVMStructSetBody void * value-type * (c-array int-type int-type) int 2 int 0)
 (def ptr-type (c-call LLVMInt32TypeInContext * * c))
 (def void-type (c-call LLVMVoidTypeInContext * * c))
 
@@ -356,8 +360,12 @@
        (if (getk state name)
           state
           (do
-            (def gl-var (c-call LLVMAddGlobal * * m * ptr-type * (symbol-name (head (tail form)))))
-            (c-call LLVMBuildStore * * main-b * gl-var * (c-call LLVMConstInt * * ptr-type int 0 int 1))
+            (def gl-var (c-call LLVMAddGlobal * * m * value-type * (symbol-name (head (tail form)))))
+            (def t-loc (c-call LLVMBuildStructGEP * * main-b * gl-var int 0 * 'type-loc'))
+            (c-call LLVMBuildStore * * main-b * (c-call LLVMConstInt * * int-type int 0 int 1) * t-loc)
+            (def v-loc (c-call LLVMBuildStructGEP * * main-b * gl-var int 1 * 'type-loc'))
+            (def num (c-call LLVMBuildBitCast * * main-b * (c-call LLVMConstReal * * num-type double 1337) * int-type * 'pack dbl'))
+            (c-call LLVMBuildStore * * main-b * num * v-loc)
             (assoc state name gl-var))))
      state
    )

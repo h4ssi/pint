@@ -761,6 +761,8 @@ ffi_type *to_type(std::string name) {
     return &ffi_type_pointer;
   } else if (name == "void") {
     return &ffi_type_void;
+  } else if (name == "double") {
+    return &ffi_type_double;
   } else {
     return &ffi_type_sint; // todo add more
   }
@@ -785,6 +787,10 @@ std::unique_ptr<CVal> to_val(ffi_type *type, Value *val) {
     }
     if (auto p = dynamic_cast<CPointer *>(val)) {
       return std::make_unique<DynamicCVal<void *>>(p->value());
+    }
+  } else if (&ffi_type_double == type) {
+    if (auto n = dynamic_cast<Number *>(val)) {
+      return std::make_unique<DynamicCVal<double>>(n->value());
     }
   } else {
     if (auto n = dynamic_cast<Number *>(val)) {
