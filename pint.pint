@@ -107,6 +107,13 @@
 
     (leduce^ i l leduce^)))
 
+(def listlen
+  (fn (l)
+    (leduce (fn (res i) (+ 1 res)) 0 l)))
+
+(def strlen
+  (fn (s) (listlen (to-list s))))
+
 (def reverse
   (fn (l)
     (leduce (fn (res i) (cons i res)) () l)))
