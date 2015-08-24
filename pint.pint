@@ -352,41 +352,69 @@
 (c-call LLVMPositionBuilderAtEnd void * main-b * main-bb)
 ;(def r (c-call LLVMBuildNSWAdd * * b * (c-call LLVMGetParam * * f int 0) * (c-call LLVMGetParam * * f int 1) * ''))
 
+(def state-mk (fn (cur-val global-names) (cons cur-val (cons global-names))))
+(def state-cur-val (fn (s) (head s)))
+(def state-global-names (fn (s) (head (tail s))))
+(def init-state (fn () (state-mk nil ())))
+
+(def tr-default (fn (state)
+  (def set-type 
+    (c-call LLVMBuildInsertValue * 
+            * main-b
+            * (c-call LLVMGetUndef * * value-type)
+            * (c-call LLVMConstInt * * int-type int 0 int 1)
+            int 0
+            * 'set-type'))
+  (def set-value
+    (c-call LLVMBuildInsertValue *
+            * main-b
+            * set-type
+            * (c-call LLVMBuildBitCast * * main-b * (c-call LLVMConstReal * * num-type double 1337) * int-type * 'pack dbl')
+            int 1
+            * 'set-value'))
+  (state-mk set-value (state-global-names state))))
+
 (def tr-form
- (fn (form state)
+ (fn (form state tr)
+   (def glb-nms (state-global-names state))
+
    (if (= (symbol 'def') (head form))
      (do
        (def name (head (tail form)))
-       (if (getk state name)
-          state
-          (do
-            (def gl-var (c-call LLVMAddGlobal * * m * value-type * (symbol-name (head (tail form)))))
-            (def t-loc (c-call LLVMBuildStructGEP * * main-b * gl-var int 0 * 'type-loc'))
-            (c-call LLVMBuildStore * * main-b * (c-call LLVMConstInt * * int-type int 0 int 1) * t-loc)
-            (def v-loc (c-call LLVMBuildStructGEP * * main-b * gl-var int 1 * 'type-loc'))
-            (def num (c-call LLVMBuildBitCast * * main-b * (c-call LLVMConstReal * * num-type double 1337) * int-type * 'pack dbl'))
-            (c-call LLVMBuildStore * * main-b * num * v-loc)
-            (assoc state name gl-var))))
-     state
-   )
-))
+       (def glb-nms^ 
+          (if (getk glb-nms name)
+            glb-nms
+            (assoc glb-nms name 
+              (c-call LLVMAddGlobal * * m * value-type * (symbol-name (head (tail form)))))))
+
+       (def gl-var (getk glb-nms^ name))
+       
+       (def val (head (tail (tail form))))
+
+
+       (def state^ 
+         (tr (cons val) (state-mk nil glb-nms^) tr))
+
+       (c-call LLVMBuildStore * * main-b * (state-cur-val state^) * gl-var)
+
+       state^)
+     (tr-default state))))
 
 (def tr
   (fn (c)
-    
+
     (def tr^ (fn (c state rec)
       (if (empty? c)
        state
        ((fn (h t)
          (def state
             (if (is-list h)
-             (tr-form h state)
-             state)) ; todo other options
+             (tr-form h state rec)
+             (tr-default state))) ; todo other options
          (rec t state rec)
        ) (head c) (tail c)))))
 
-    (tr^ c () tr^)
-  ))
+    (tr^ c (init-state) tr^)))
 
 (tr code)
 
