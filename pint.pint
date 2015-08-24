@@ -381,6 +381,38 @@
             * 'set-value'))
   (state-mk set-value (state-global-names state))))
 
+(def tr-string (fn (string state)
+ (def strval
+   (c-call LLVMConstStringInContext * 
+    * c
+    * string
+    int (+ (strlen string) 1)
+    int 1)) ; do not zero terminate
+ (def strmem
+   (c-call LLVMAddGlobal *
+    * m
+    * (c-call LLVMTypeOf * * strval)
+    * ''))
+ (c-call LLVMSetGlobalConstant void * strmem int 1)
+ (c-call LLVMSetInitializer void * strmem * strval)
+ (state-mk
+  (c-call LLVMConstNamedStruct *
+    * value-type
+    * (c-array
+        (c-call LLVMConstInt * * int-type int 2 int 1)
+        (c-call LLVMBuildPtrToInt *
+         * main-b
+         * (c-call LLVMBuildInBoundsGEP *
+            * main-b
+            * strmem
+            * (c-array (LLVMConstInt * * int-type int 0 int 1))
+            int 0 ; TODO should be 1, but then crashes? why?
+            * 'str to ptr')
+         * int-type
+         * 'ptr to int'))
+    int 2)
+  (state-global-names state))))
+
 (def tr-form
  (fn (form state tr)
    (def glb-nms (state-global-names state))
@@ -417,7 +449,9 @@
          (def state
             (if (is-list h)
              (tr-form h state rec)
-             (tr-default state))) ; todo other options
+            (if (is-string h)
+             (tr-string h state)
+             (tr-default state)))) ; todo other options
          (rec t state rec)
        ) (head c) (tail c)))))
 
