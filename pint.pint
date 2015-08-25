@@ -405,8 +405,8 @@
          * (c-call LLVMBuildInBoundsGEP *
             * main-b
             * strmem
-            * (c-array (LLVMConstInt * * int-type int 0 int 1))
-            int 0 ; TODO should be 1, but then crashes? why?
+            * (c-array (c-call LLVMConstInt * * int-type int 0 int 1))
+            int 1
             * 'str to ptr')
          * int-type
          * 'ptr to int'))
