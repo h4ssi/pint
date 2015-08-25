@@ -974,6 +974,8 @@ std::shared_ptr<Value> eval(Memory &m, std::shared_ptr<Value> expr) {
       }
       return (f->value())(args);
     }
+    std::cerr << "cannot call with target: " << to_string(i->get())
+              << std::endl;
     return nullptr;
   } else {
     return expr;
