@@ -364,6 +364,16 @@
 (def state-global-names (fn (s) (head (tail s))))
 (def init-state (fn () (state-mk nil ())))
 
+(def tr-nil (fn (state)
+ (state-mk
+  (c-call LLVMConstNamedStruct *
+    * value-type
+    * (c-array
+        (c-call LLVMConstInt * * int-type int 0 int 1) ; type 0 = nil
+        (c-call LLVMConstInt * * int-type int 0 int 1))
+    int 2)
+  (state-global-names state))))
+
 (def tr-number (fn (number state)
   (def set-type 
     (c-call LLVMBuildInsertValue * 
@@ -432,9 +442,11 @@
        
        (def val (head (tail (tail form))))
 
-
+       (def state^ (state-mk nil glb-nms^))
        (def state^ 
-         (tr (cons val) (state-mk nil glb-nms^) tr))
+         (if (nil? val)
+            (tr-nil state^)
+            (tr (cons val) state^ tr)))
 
        (c-call LLVMBuildStore * * main-b * (state-cur-val state^) * gl-var)
 
