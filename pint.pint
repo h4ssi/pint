@@ -364,22 +364,24 @@
 (def state-global-names (fn (s) (head (tail s))))
 (def init-state (fn () (state-mk nil ())))
 
-(def tr-default (fn (state)
+(def tr-number (fn (number state)
   (def set-type 
     (c-call LLVMBuildInsertValue * 
             * main-b
             * (c-call LLVMGetUndef * * value-type)
-            * (c-call LLVMConstInt * * int-type int 0 int 1)
+            * (c-call LLVMConstInt * * int-type int 1 int 1) ; type 1 = number
             int 0
             * 'set-type'))
   (def set-value
     (c-call LLVMBuildInsertValue *
             * main-b
             * set-type
-            * (c-call LLVMBuildBitCast * * main-b * (c-call LLVMConstReal * * num-type double 1337) * int-type * 'pack dbl')
+            * (c-call LLVMBuildBitCast * * main-b * (c-call LLVMConstReal * * num-type double number) * int-type * 'pack dbl')
             int 1
             * 'set-value'))
   (state-mk set-value (state-global-names state))))
+
+(def tr-default (fn (state) (tr-number 1337 state)))
 
 (def tr-string (fn (string state)
  (def strval
@@ -399,7 +401,7 @@
   (c-call LLVMConstNamedStruct *
     * value-type
     * (c-array
-        (c-call LLVMConstInt * * int-type int 2 int 1)
+        (c-call LLVMConstInt * * int-type int 2 int 1) ; type 2 = string
         (c-call LLVMBuildPtrToInt *
          * main-b
          * (c-call LLVMBuildInBoundsGEP *
@@ -451,7 +453,9 @@
              (tr-form h state rec)
             (if (is-string h)
              (tr-string h state)
-             (tr-default state)))) ; todo other options
+            (if (is-number h)
+             (tr-number h state)
+             (tr-default state))))) ; todo other options
          (rec t state rec)
        ) (head c) (tail c)))))
 
