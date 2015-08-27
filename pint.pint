@@ -425,6 +425,18 @@
     int 2)
   (state-global-names state))))
 
+(def tr-load
+ (fn (sym state)
+  (def glb-nms (state-global-names state))
+
+  (def glb-var (getk glb-nms sym))
+
+  (if glb-var
+   (state-mk (c-call LLVMBuildLoad * * main-b * glb-var * 'load_from_global') glb-nms)
+   (do
+    (print '[E] unkown variable ' (symbol-name sym) newline)
+    (tr-nil state)))))
+
 (def tr-form
  (fn (form state tr)
    (def glb-nms (state-global-names state))
@@ -467,7 +479,9 @@
              (tr-string h state)
             (if (is-number h)
              (tr-number h state)
-             (tr-default state))))) ; todo other options
+            (if (is-symbol h)
+             (tr-load h state)
+             (tr-default state)))))) ; todo other options
          (rec t state rec)
        ) (head c) (tail c)))))
 
