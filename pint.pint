@@ -480,6 +480,34 @@
     (print '[E] unkown variable ' (symbol-name sym) newline)
     (tr-nil state)))))
 
+(def void-type (c-call LLVMVoidTypeInContext * * c))
+(def pointer-type-target (c-call LLVMInt8TypeInContext * * c))
+(def pointer-type (c-call LLVMPointerType * * pointer-type-target int 0))
+
+(def tr-c-type
+ (fn (type)
+  (if (= (symbol 'void') type)
+   void-type
+  (if (= (symbol '*') type)
+   pointer-type
+   number-type))))
+
+(def tr-c-call
+ (fn (form state tr)
+  (def fn-name (head (tail form)))
+  (def ret-type (head (tail (tail form))))
+  (def typed-args (chunk 2 (tail (tail (tail form)))))
+
+  (def ret-c-type (tr-c-type ret-type))
+  (def c-typed-args (map (fn (arg) (unpair arg (fn (type name) (tr-c-type type)))) (head typed-args))) ; care for wrongly chunked!
+  
+  (def arg-t-array (c-array (head c-typed-args))) ; todo all args!!
+  (def fn-t (c-call LLVMFunctionType * * ret-c-type * arg-t-array int 1 int 0))
+
+  (def f (c-call LLVMAddFunction * * m * (symbol-name fn-name) * fn-t))
+  
+  state))
+
 (def tr-form
  (fn (form state tr)
    (def glb-nms (state-global-names state))
@@ -506,7 +534,9 @@
        (c-call LLVMBuildStore * * main-b * (state-cur-val state^) * gl-var)
 
        state^)
-     (tr-default state))))
+   (if (= (symbol 'c-call') (head form))
+     (tr-c-call form state tr)
+   (tr-default state)))))
 
 (def tr
   (fn (c)
