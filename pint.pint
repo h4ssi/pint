@@ -204,6 +204,49 @@
   (fn (l r)
     (cons l (cons r))))
 
+(def unpair
+ (fn (p f)
+  (f (head p) (head (tail p)))))
+
+(def split
+ (fn (count list)
+  
+  (def split^
+   (fn (list i rec)
+    (if (= i count)
+     (pair () list)
+     (if (empty? list)
+      (pair () nil)
+      (unpair (rec (tail list) (+ i 1) rec)
+       (fn (h t)
+        (pair (cons (head list) h) t)))))))
+  
+  (split^ list 0 split^)))
+
+(def take
+ (fn (count list)
+  (unpair (split count list)
+   (fn (h t) h))))
+
+(def drop
+ (fn (count list)
+  (unpair (split count list)
+   (fn (h t) t))))
+
+(def chunk
+ (fn (chunk-size list)
+  (def chunk^
+   (fn (list rec)
+    (unpair (split 2 list)
+     (fn (h t)
+      (if (nil? t)
+       (pair () h)
+       (if (empty? t)
+        (pair (cons h) nil)
+        (unpair (rec t rec)
+         (fn (hh tt)
+          (pair (cons h hh) tt)))))))))
+  (chunk^ list chunk^)))
 
 (def parse-sym 
   (fn (cs prs)
