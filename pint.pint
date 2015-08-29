@@ -497,6 +497,31 @@
    pointer-type
    double-type))))))
 
+(def tr-cast-to-c-type
+ (fn (state type val)
+  (def f (c-call LLVMGetBasicBlockParent * * (c-call LLVMGetInsertBlock * * main-b)))
+  (def default-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'default'))
+
+  (def dyn-type (c-call LLVMBuildExtractValue * * main-b * val int 0 * 'dyn-type'))
+  (c-call LLVMBuildSwitch * * main-b * dyn-type * default-bb int 0)
+
+  (c-call LLVMPositionBuilderAtEnd void * main-b * default-bb)
+
+  ; todo handle cast for each possible dyn type!
+  (def default-v (state-cur-val (tr-nil state)))
+
+  (def merge-block (c-call LLVMAppendBasicBlockInContext * * c * f * 'merge'))
+
+  (c-call LLVMBuildBr * * main-b * merge-block)
+
+  (c-call LLVMPositionBuilderAtEnd void * main-b * merge-block)
+
+  (def phi (c-call LLVMBuildPhi * * main-b * (tr-c-type type) * 'c-value'))
+
+  (c-call LLVMAddIncoming void * phi * (c-array default-v) * (c-array default-bb) int 1)
+
+  (state-mk phi (state-global-names state))))
+
 (def tr-c-call
  (fn (form state tr)
   (def fn-name (head (tail form)))
@@ -510,6 +535,8 @@
   (def fn-t (c-call LLVMFunctionType * * ret-c-type * arg-t-array int 1 int 0))
 
   (def f (c-call LLVMAddFunction * * m * (symbol-name fn-name) * fn-t))
+
+  (def arg-cast (unpair (head (head typed-args)) (fn (type arg) (tr-cast-to-c-type state type (state-cur-val (tr (cons arg) state tr))))))
   
   state))
 
