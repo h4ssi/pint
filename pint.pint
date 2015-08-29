@@ -481,16 +481,21 @@
     (tr-nil state)))))
 
 (def void-type (c-call LLVMVoidTypeInContext * * c))
-(def pointer-type-target (c-call LLVMInt8TypeInContext * * c))
-(def pointer-type (c-call LLVMPointerType * * pointer-type-target int 0))
+(def i8-type (c-call LLVMInt8TypeInContext * * c))
+(def i32-type (c-call LLVMInt32TypeInContext * * c))
+(def pointer-type (c-call LLVMPointerType * * i8-type int 0))
 
 (def tr-c-type
  (fn (type)
   (if (= (symbol 'void') type)
    void-type
+  (if (= (symbol 'char') type)
+   i8-type
+  (if (= (symbol 'int') type)
+   i32-type
   (if (= (symbol '*') type)
    pointer-type
-   number-type))))
+   number-type))))))
 
 (def tr-c-call
  (fn (form state tr)
