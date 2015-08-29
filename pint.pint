@@ -389,7 +389,7 @@
 (def c (c-call LLVMGetGlobalContext *))
 (def m (c-call LLVMModuleCreateWithNameInContext * * 'real' * c))
 (def int-type (c-call LLVMInt64TypeInContext * * c))
-(def num-type (c-call LLVMDoubleTypeInContext * * c))
+(def double-type (c-call LLVMDoubleTypeInContext * * c))
 (def value-type (c-call LLVMStructCreateNamed * * c * 'value_type'))
 (c-call LLVMStructSetBody void * value-type * (c-array int-type int-type) int 2 int 0)
 (def ptr-type (c-call LLVMInt32TypeInContext * * c))
@@ -429,7 +429,7 @@
     (c-call LLVMBuildInsertValue *
             * main-b
             * set-type
-            * (c-call LLVMBuildBitCast * * main-b * (c-call LLVMConstReal * * num-type double number) * int-type * 'pack dbl')
+            * (c-call LLVMBuildBitCast * * main-b * (c-call LLVMConstReal * * double-type double number) * int-type * 'pack dbl')
             int 1
             * 'set-value'))
   (state-mk set-value (state-global-names state))))
@@ -495,7 +495,7 @@
    i32-type
   (if (= (symbol '*') type)
    pointer-type
-   number-type))))))
+   double-type))))))
 
 (def tr-c-call
  (fn (form state tr)
