@@ -85,6 +85,9 @@
 (def nil? (fn (w) (if w nil '')))
 (def not  (fn (c) (if c nil '')))
 
+(def and (fn (a b) (if a b a)))
+(def or (fn (a b) (if a a b)))
+
 (def empty? (fn (l) (nil? (tail l))))
 
 (def reduce
