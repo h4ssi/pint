@@ -487,9 +487,28 @@
     (print '[E] unkown variable ' (symbol-name sym) newline)
     (tr-nil state)))))
 
+; LLVMTypeKind
+(def LLVMVoidTypeKind 0) ; type with no size
+(def LLVMHalfTypeKind 1) ; 16 bit floating point type
+(def LLVMFloatTypeKind 2) ; 32 bit floating point type
+(def LLVMDoubleTypeKind 3) ; 64 bit floating point type
+(def LLVMX86_FP80TypeKind 4) ; 80 bit floating point type (X87)
+(def LLVMFP128TypeKind 5) ; 128 bit floating point type (112-bit mantissa)
+(def LLVMPPC_FP128TypeKind 6) ; 128 bit floating point type (two 64-bits)
+(def LLVMLabelTypeKind 7) ; Labels
+(def LLVMIntegerTypeKind 8) ; Arbitrary bit width integers
+(def LLVMFunctionTypeKind 9) ; Functions
+(def LLVMStructTypeKind 10) ; Structures
+(def LLVMArrayTypeKind 11) ; Arrays
+(def LLVMPointerTypeKind 12) ; Pointers
+(def LLVMVectorTypeKind 13) ; SIMD 'packed' format, or other vector type
+(def LLVMMetadataTypeKind 14) ; Metadata
+(def LLVMX86_MMXTypeKind 15) ; X86 MMX
+
 (def void-type (c-call LLVMVoidTypeInContext * * c))
 (def i8-type (c-call LLVMInt8TypeInContext * * c))
 (def i32-type (c-call LLVMInt32TypeInContext * * c))
+(def float-type (c-call LLVMFloatTypeInContext * * c))
 (def pointer-type (c-call LLVMPointerType * * i8-type int 0))
 
 (def tr-c-type
@@ -498,18 +517,57 @@
    void-type
   (if (= (symbol 'char') type)
    i8-type
+  (if (= (symbol 'uchar') type)
+   i8-type
   (if (= (symbol 'int') type)
    i32-type
+  (if (= (symbol 'uint') type)
+   i32-type
+  (if (= (symbol 'float') type)
+   float-type
+  (if (= (symbol 'double') type)
+   double-type
   (if (= (symbol '*') type)
    pointer-type
-   double-type))))))
+   double-type))))))))))
 
 (def tr-cast-from-nil-to-c-type
  (fn (type val) (c-call LLVMConstNull * * (tr-c-type type))))
 
+(def is-type-unsigned (fn (type) (= 'u' (substr (symbol-name type) 0 1))))
+
 (def tr-cast-from-number-to-c-type
  (fn (type val)
-    (state-cur-val (tr-nil state))))
+  (def c-type (tr-c-type type))
+
+  (def kind (c-call LLVMGetTypeKind int * c-type))
+
+  (def label (str 'pack-' (symbol-name type)))
+
+  (def get-val (fn ()
+                (c-call LLVMBuildBitCast *
+                 * main-b
+                 * (c-call LLVMBuildExtractValue * * main-b * val int 1 * 'extract-double')
+                 * double-type
+                 * 'convert-double')))
+
+  (if (= kind LLVMIntegerTypeKind)
+   (if (is-type-unsigned type)
+    (c-call LLVMBuildFPToUI * * main-b * (get-val) * c-type * label)
+    (c-call LLVMBuildFPToSI * * main-b * (get-val) * c-type * label))
+  (if (or
+       (= kind LLVMHalfTypeKind)
+       (= kind LLVMFloatTypeKind))
+   (c-call LLVMBuildFPTrunc * * main-b * (get-val) * c-type * label)
+  (if (= kind LLVMDoubleTypeKind)
+   (get-val)
+  (if (or
+       (= kind LLVMX86_FP80TypeKind)
+      (or
+       (= kind LLVMFP128TypeKind)
+       (= kind LLVMPPC_FP128TypeKind)))
+   (c-call LLVMBuildFPTrunc * * main-b * (get-val) * c-type * label)
+   (c-call LLVMConstNull * * c-type)))))))
 
 (def tr-cast-from-string-to-c-type
  (fn (type val)
@@ -517,7 +575,7 @@
    (c-call LLVMBuildIntToPtr * * main-b * (c-call LLVMBuildExtractValue * * main-b * val int 1 * 'ptr-to-str-data') * pointer-type * 'pack-ptr')
    (c-call LLVMConstNull * * (tr-c-type type)))))
 
-(def tr-cast-to-c-type
+(def tr-cast-to-c-type ; todo write tests for all combinations!
  (fn (state type val)
   (def f (c-call LLVMGetBasicBlockParent * * (c-call LLVMGetInsertBlock * * main-b)))
 
@@ -580,6 +638,7 @@
 
   (def arg-cast (unpair (head (head typed-args)) (fn (type arg) (tr-cast-to-c-type state type (state-cur-val (tr (cons arg) state tr))))))
   
+  ; todo call the function!
   state))
 
 (def tr-form
