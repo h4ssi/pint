@@ -501,28 +501,62 @@
    pointer-type
    double-type))))))
 
+(def tr-cast-from-nil-to-c-type
+ (fn (type val)
+    (state-cur-val (tr-nil state))))
+
+(def tr-cast-from-number-to-c-type
+ (fn (type val)
+    (state-cur-val (tr-nil state))))
+
+(def tr-cast-from-string-to-c-type
+ (fn (type val)
+    (state-cur-val (tr-nil state))))
+
 (def tr-cast-to-c-type
  (fn (state type val)
   (def f (c-call LLVMGetBasicBlockParent * * (c-call LLVMGetInsertBlock * * main-b)))
-  (def default-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'default'))
 
   (def dyn-type (c-call LLVMBuildExtractValue * * main-b * val int 0 * 'dyn-type'))
-  (c-call LLVMBuildSwitch * * main-b * dyn-type * default-bb int 0)
-
-  (c-call LLVMPositionBuilderAtEnd void * main-b * default-bb)
-
-  ; todo handle cast for each possible dyn type!
-  (def default-v (state-cur-val (tr-nil state)))
-
   (def merge-block (c-call LLVMAppendBasicBlockInContext * * c * f * 'merge'))
 
+  (def string-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'string-cast'))
+  (def switch (c-call LLVMBuildSwitch * * main-b * dyn-type * string-cast-bb int 2))
+
+  ; cast from nil
+  (def nil-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'nil-cast'))
+  (c-call LLVMAddCase void * switch * nil-type-index * nil-cast-bb)
+  (c-call LLVMPositionBuilderAtEnd void * main-b * nil-cast-bb)
+  (def nil-cast-v (tr-cast-from-nil-to-c-type type val))
+  (c-call LLVMBuildBr * * main-b * merge-block)
+
+  ; cast from number
+  (def number-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'number-cast'))
+  (c-call LLVMAddCase void * switch * number-type-index * number-cast-bb)
+  (c-call LLVMPositionBuilderAtEnd void * main-b * number-cast-bb)
+  (def number-cast-v (tr-cast-from-number-to-c-type type val))
+  (c-call LLVMBuildBr * * main-b * merge-block)
+
+  ; default must be cast from string
+  (c-call LLVMPositionBuilderAtEnd void * main-b * string-cast-bb)
+  (def string-cast-v (tr-cast-from-string-to-c-type type val))
   (c-call LLVMBuildBr * * main-b * merge-block)
 
   (c-call LLVMPositionBuilderAtEnd void * main-b * merge-block)
 
   (def phi (c-call LLVMBuildPhi * * main-b * (tr-c-type type) * 'c-value'))
 
-  (c-call LLVMAddIncoming void * phi * (c-array default-v) * (c-array default-bb) int 1)
+  (c-call LLVMAddIncoming void
+   * phi
+   * (c-array
+      nil-cast-v
+      number-cast-v
+      string-cast-v)
+   * (c-array
+      nil-cast-bb
+      number-cast-bb
+      string-cast-bb)
+   int 3)
 
   (state-mk phi (state-global-names state))))
 
