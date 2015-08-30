@@ -502,8 +502,7 @@
    double-type))))))
 
 (def tr-cast-from-nil-to-c-type
- (fn (type val)
-    (state-cur-val (tr-nil state))))
+ (fn (type val) (c-call LLVMConstNull * * (tr-c-type type))))
 
 (def tr-cast-from-number-to-c-type
  (fn (type val)
