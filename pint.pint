@@ -634,12 +634,20 @@
   (def arg-t-array (c-array (head c-typed-args))) ; todo all args!!
   (def fn-t (c-call LLVMFunctionType * * ret-c-type * arg-t-array int 1 int 0))
 
-  (def f (c-call LLVMAddFunction * * m * (symbol-name fn-name) * fn-t))
+  (def target-fn (c-call LLVMAddFunction * * m * (symbol-name fn-name) * fn-t))
 
   (def arg-cast (unpair (head (head typed-args)) (fn (type arg) (tr-cast-to-c-type state type (state-cur-val (tr (cons arg) state tr))))))
   
-  ; todo call the function!
-  state))
+  (def res (c-call LLVMBuildCall *
+            * main-b
+            * target-fn
+            * (c-array (state-cur-val arg-cast))
+            int 1
+            * (str 'call-' (symbol-name fn-name))))
+  
+  ; todo properly unpack result
+
+  (state-mk res (state-global-names state))))
 
 (def tr-form
  (fn (form state tr)
