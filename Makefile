@@ -12,8 +12,14 @@ hello: hello.o extern.o
 llvm-c-poc: llvm-c-poc.c
 	clang++ llvm-c-poc.c $(shell llvm-config --cflags --ldflags --system-libs --libs) -o llvm-c-poc
 
+out.ll: hello pint.pint helloworld.pint
+	./hello pint.pint helloworld.pint
+
+helloworld: out.ll
+	clang out.ll -o helloworld
+
 clean:
-	rm -f hello hello.o extern.o llvm-c-poc
+	rm -f hello hello.o extern.o llvm-c-poc out.ll helloworld
 
 .PHONY: all clean
 

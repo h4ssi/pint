@@ -1,2 +1,5 @@
 /hello
+/helloworld
+*.ll
+*.o
 /llvm-c-poc

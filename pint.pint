@@ -399,7 +399,7 @@
 (def void-type (c-call LLVMVoidTypeInContext * * c))
 
 (def main-f-type (c-call LLVMFunctionType * * void-type * (c-array) int 0 int 0))
-(def main-f (c-call LLVMAddFunction * * m * '_start' * main-f-type))
+(def main-f (c-call LLVMAddFunction * * m * 'main' * main-f-type))
 (def main-bb (c-call LLVMAppendBasicBlockInContext * * c * main-f * 'entry'))
 (def main-b (c-call LLVMCreateBuilder *))
 (c-call LLVMPositionBuilderAtEnd void * main-b * main-bb)

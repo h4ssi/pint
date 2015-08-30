@@ -1,0 +1,3 @@
+(def msg 'hello world!')
+
+(c-call puts int * msg)
