@@ -407,12 +407,16 @@
 (def state-global-names (fn (s) (head (tail s))))
 (def init-state (fn () (state-mk nil ())))
 
+(def nil-type-index (c-call LLVMConstInt * * int-type int 0 int 1)) ; type 0 = nil
+(def number-type-index (c-call LLVMConstInt * * int-type int 1 int 1)) ; type 1 = number
+(def string-type-index (c-call LLVMConstInt * * int-type int 2 int 1)) ; type 2 = string
+
 (def tr-nil (fn (state)
  (state-mk
   (c-call LLVMConstNamedStruct *
     * value-type
     * (c-array
-        (c-call LLVMConstInt * * int-type int 0 int 1) ; type 0 = nil
+        nil-type-index
         (c-call LLVMConstInt * * int-type int 0 int 1))
     int 2)
   (state-global-names state))))
@@ -422,7 +426,7 @@
     (c-call LLVMBuildInsertValue * 
             * main-b
             * (c-call LLVMGetUndef * * value-type)
-            * (c-call LLVMConstInt * * int-type int 1 int 1) ; type 1 = number
+            * number-type-index
             int 0
             * 'set-type'))
   (def set-value
@@ -454,7 +458,7 @@
   (c-call LLVMConstNamedStruct *
     * value-type
     * (c-array
-        (c-call LLVMConstInt * * int-type int 2 int 1) ; type 2 = string
+        string-type-index
         (c-call LLVMBuildPtrToInt *
          * main-b
          * (c-call LLVMBuildInBoundsGEP *
