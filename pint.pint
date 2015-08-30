@@ -433,7 +433,7 @@
     (c-call LLVMBuildInsertValue *
             * main-b
             * set-type
-            * (c-call LLVMBuildBitCast * * main-b * (c-call LLVMConstReal * * double-type double number) * int-type * 'pack dbl')
+            * (c-call LLVMBuildBitCast * * main-b * (c-call LLVMConstReal * * double-type double number) * int-type * 'pack-dbl')
             int 1
             * 'set-value'))
   (state-mk set-value (state-global-names state))))
@@ -511,7 +511,9 @@
 
 (def tr-cast-from-string-to-c-type
  (fn (type val)
-    (state-cur-val (tr-nil state))))
+  (if (= (symbol '*') type)
+   (c-call LLVMBuildIntToPtr * * main-b * (c-call LLVMBuildExtractValue * * main-b * val int 1 * 'ptr-to-str-data') * pointer-type * 'pack-ptr')
+   (c-call LLVMConstNull * * (tr-c-type type)))))
 
 (def tr-cast-to-c-type
  (fn (state type val)
