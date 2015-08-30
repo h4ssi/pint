@@ -659,8 +659,10 @@
        (def glb-nms^ 
           (if (getk glb-nms name)
             glb-nms
-            (assoc glb-nms name 
-              (c-call LLVMAddGlobal * * m * value-type * (symbol-name (head (tail form)))))))
+            (do
+              (def var (c-call LLVMAddGlobal * * m * value-type * (symbol-name (head (tail form)))))
+              (c-call LLVMSetInitializer void * var * (c-call LLVMConstNull * * value-type))
+              (assoc glb-nms name var))))
 
        (def gl-var (getk glb-nms^ name))
        
