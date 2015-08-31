@@ -542,7 +542,7 @@
 
   (def kind (c-call LLVMGetTypeKind int * c-type))
 
-  (def label (str 'pack-' (symbol-name type)))
+  (def label (str 'unpack-' (symbol-name type)))
 
   (def get-val (fn ()
                 (c-call LLVMBuildBitCast *
@@ -566,7 +566,7 @@
       (or
        (= kind LLVMFP128TypeKind)
        (= kind LLVMPPC_FP128TypeKind)))
-   (c-call LLVMBuildFPTrunc * * main-b * (get-val) * c-type * label)
+   (c-call LLVMBuildFPExt * * main-b * (get-val) * c-type * label)
    (c-call LLVMConstNull * * c-type)))))))
 
 (def tr-cast-from-string-to-c-type
