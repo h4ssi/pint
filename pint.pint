@@ -508,6 +508,7 @@
 (def void-type (c-call LLVMVoidTypeInContext * * c))
 (def i8-type (c-call LLVMInt8TypeInContext * * c))
 (def i32-type (c-call LLVMInt32TypeInContext * * c))
+(def i64-type (c-call LLVMInt64TypeInContext * * c))
 (def float-type (c-call LLVMFloatTypeInContext * * c))
 (def pointer-type (c-call LLVMPointerType * * i8-type int 0))
 
@@ -622,6 +623,50 @@
 
   (state-mk phi (state-global-names state))))
 
+(def tr-cast-from-c-type
+ (fn (state type val)
+  (def c-type (tr-c-type type))
+
+  (def kind (c-call LLVMGetTypeKind int * c-type))
+
+  (def label (str 'cast-' (symbol-name type)))
+  (def pack-label (str 'pack-' (symbol-name type)))
+
+  (def build-val
+   (fn (type-id val)
+    (c-call LLVMBuildInsertValue *
+            * main-b
+            * (c-call LLVMConstNamedStruct *
+                      * value-type
+                      * (c-array type-id (c-call LLVMGetUndef * * i64-type))
+                      int 2)
+            * (c-call LLVMBuildBitCast *
+                      * main-b
+                      * val
+                      * i64-type
+                      * 'convert-to-i64')
+            int 1
+            * pack-label)))
+
+  (if (= kind LLVMIntegerTypeKind)
+   (build-val number-type-index
+    (if (is-type-unsigned type)
+     (c-call LLVMBuildUIToFP * * main-b * val * double-type * label)
+     (c-call LLVMBuildSIToFP * * main-b * val * double-type * label)))
+  (if (or
+       (= kind LLVMHalfTypeKind)
+       (= kind LLVMFloatTypeKind))
+   (build-val number-type-index (c-call LLVMBuildFPExt * * main-b * val * double-type * label))
+  (if (= kind LLVMDoubleTypeKind)
+   (build-val number-type-index val)
+  (if (or
+       (= kind LLVMX86_FP80TypeKind)
+      (or
+       (= kind LLVMFP128TypeKind)
+       (= kind LLVMPPC_FP128TypeKind)))
+   (build-val number-type-index (c-call LLVMBuildFPTrunc * * main-b * val * double-type * label))
+   (c-call LLVMConstNull * * value-type))))))) ; todo handle non numeric types
+
 (def tr-c-call
  (fn (form state tr)
   (def fn-name (head (tail form)))
@@ -645,9 +690,9 @@
             int 1
             * (str 'call-' (symbol-name fn-name))))
   
-  ; todo properly unpack result
+  (def packed-res (tr-cast-from-c-type state ret-type res))
 
-  (state-mk res (state-global-names state))))
+  (state-mk packed-res (state-global-names state))))
 
 (def tr-form
  (fn (form state tr)
