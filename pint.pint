@@ -420,7 +420,7 @@
     * value-type
     * (c-array
         nil-type-index
-        (c-call LLVMConstInt * * int-type int 0 int 1))
+        (c-call LLVMConstNull * * int-type))
     int 2)
   (state-global-names state))))
 
