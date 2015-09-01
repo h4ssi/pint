@@ -675,17 +675,19 @@
   (def target-fn (c-call LLVMAddFunction * * m * (symbol-name fn-name) * fn-t))
 
   (def arg-cast (unpair (head (head typed-args)) (fn (type arg) (tr-cast-to-c-type state type (state-cur-val (tr (cons arg) state tr))))))
-  
+ 
+  (def is-void (= (symbol 'void') ret-type))
   (def res (c-call LLVMBuildCall *
             * main-b
             * target-fn
             * (c-array (state-cur-val arg-cast))
             int 1
-            * (str 'call-' (symbol-name fn-name))))
-  
-  (def packed-res (tr-cast-from-c-type state ret-type res))
-
-  (state-mk packed-res (state-global-names state))))
+            * (if is-void '' (str 'call-' (symbol-name fn-name)))))
+  (if is-void
+   (tr-nil state)
+   (state-mk
+    (tr-cast-from-c-type state ret-type res)
+    (state-global-names state)))))
 
 (def tr-form
  (fn (form state tr)
