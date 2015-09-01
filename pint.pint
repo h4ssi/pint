@@ -425,21 +425,14 @@
   (state-global-names state))))
 
 (def tr-number (fn (number state)
-  (def set-type 
-    (c-call LLVMBuildInsertValue * 
-            * main-b
-            * (c-call LLVMGetUndef * * value-type)
-            * number-type-index
-            int 0
-            * 'set-type'))
-  (def set-value
-    (c-call LLVMBuildInsertValue *
-            * main-b
-            * set-type
-            * (c-call LLVMBuildBitCast * * main-b * (c-call LLVMConstReal * * double-type double number) * int-type * 'pack-dbl')
-            int 1
-            * 'set-value'))
-  (state-mk set-value (state-global-names state))))
+  (state-mk
+   (c-call LLVMConstNamedStruct *
+     * value-type
+     * (c-array
+         nil-type-index
+         (c-call LLVMBuildBitCast * * main-b * (c-call LLVMConstReal * * double-type double number) * int-type * 'pack-dbl'))
+     int 2)
+   (state-global-names state))))
 
 (def tr-default (fn (state) (tr-number 1337 state)))
 
