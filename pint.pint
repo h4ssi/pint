@@ -668,20 +668,23 @@
 
   (def ret-c-type (tr-c-type ret-type))
   (def c-typed-args (map (fn (arg) (unpair arg (fn (type name) (tr-c-type type)))) (head typed-args))) ; care for wrongly chunked!
+  (def num-args (listlen c-typed-args))
   
-  (def arg-t-array (c-array (head c-typed-args))) ; todo all args!!
-  (def fn-t (c-call LLVMFunctionType * * ret-c-type * arg-t-array int 1 int 0))
+  (def arg-t-array (apply c-array c-typed-args))
+  (def fn-t (c-call LLVMFunctionType * * ret-c-type * arg-t-array int num-args int 0))
 
   (def target-fn (c-call LLVMAddFunction * * m * (symbol-name fn-name) * fn-t))
 
-  (def arg-cast (unpair (head (head typed-args)) (fn (type arg) (tr-cast-to-c-type state type (state-cur-val (tr (cons arg) state tr))))))
+  (def c-casted-args (map (fn (typed-arg)
+                           (unpair typed-arg (fn (type arg) (tr-cast-to-c-type state type (state-cur-val (tr (cons arg) state tr))))))
+                          (head typed-args))) ; todo map evals right to left
  
   (def is-void (= (symbol 'void') ret-type))
   (def res (c-call LLVMBuildCall *
             * main-b
             * target-fn
-            * (c-array (state-cur-val arg-cast))
-            int 1
+            * (apply c-array (map state-cur-val c-casted-args))
+            int num-args
             * (if is-void '' (str 'call-' (symbol-name fn-name)))))
   (if is-void
    (tr-nil state)
