@@ -631,6 +631,29 @@ void setup() {
         }
         return std::make_shared<CStaticPointer>(nullptr);
       });
+  root["apply"] =
+      std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
+        auto i = std::begin(l);
+        auto e = std::end(l);
+
+        if (i != e) {
+          if (auto f = dynamic_cast<Function *>(i->get())) {
+            if (++i != e) {
+              if (auto args = dynamic_cast<List *>(i->get())) {
+                std::list<std::shared_ptr<Value>> arglist;
+
+                for (auto &a : args->value()) {
+                  arglist.emplace_back(a);
+                }
+
+                return (f->value())(arglist);
+              }
+            }
+          }
+        }
+
+        return nullptr;
+      });
 }
 
 #include <unordered_set>

@@ -161,6 +161,8 @@
 (test (not (is-fn c-test-val)) 'c value is not a fn')
 (test (is-fn print) '(print ...) is not a fn')
 
+(test (= (apply str (cons 1 (cons 2 (cons 3)))) '123') 'apply list as args to str')
+
 (print (str 'tests: ' num-tests))
 
 failed-tests
