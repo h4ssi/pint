@@ -675,9 +675,10 @@
 
   (def target-fn (c-call LLVMAddFunction * * m * (symbol-name fn-name) * fn-t))
 
-  (def c-casted-args (map (fn (typed-arg)
-                           (unpair typed-arg (fn (type arg) (tr-cast-to-c-type state type (state-cur-val (tr (cons arg) state tr))))))
-                          (head typed-args))) ; todo map evals right to left
+  (def c-casted-args (reverse
+                       (map (fn (typed-arg)
+                             (unpair typed-arg (fn (type arg) (tr-cast-to-c-type state type (state-cur-val (tr (cons arg) state tr))))))
+                            (reverse (head typed-args)))))
  
   (def is-void (= (symbol 'void') ret-type))
   (def res (c-call LLVMBuildCall *
