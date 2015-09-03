@@ -430,7 +430,7 @@
    (c-call LLVMConstNamedStruct *
      * value-type
      * (c-array
-         nil-type-index
+         number-type-index
          (c-call LLVMBuildBitCast * * main-b * (c-call LLVMConstReal * * double-type double number) * int-type * 'pack-dbl'))
      int 2)
    (state-global-names state))))
