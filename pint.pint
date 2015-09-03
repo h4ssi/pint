@@ -514,10 +514,14 @@
 
 (def tr-load
  (fn (sym state)
-  (def glb-var (state-get state sym))
-
-  (if glb-var
-   (state-set-cur-value state (c-call LLVMBuildLoad * * main-b * glb-var * 'load_from_global'))
+  (def var (state-get state sym))
+  (if var
+   (unpair var (fn (label val)
+    (if (= 'reg' label)
+     (state-set-cur-value state val)
+    (if (= 'var' label)
+     (state-set-cur-value state (c-call LLVMBuildLoad * * main-b * val * 'load_from_var'))
+    (print '[E] expected ' (symbol-name sym) ' to be a variable, actually is ' label newline)))))
    (do
     (print '[E] unkown variable ' (symbol-name sym) newline)
     (tr-nil state)))))
@@ -856,9 +860,27 @@
 
    (def bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'entry'))
    (c-call LLVMPositionBuilderAtEnd void * main-b * bb)
-   (c-call LLVMBuildRet * * main-b * (state-cur-value (tr-nil state)))
+
+   (def local-state (state-branch state))
+
+   (def local-state^
+    (snd
+    (leduce (fn (s arg)
+             (unpair s (fn (i st)
+              (pair
+               (+ i 1)
+               (state-add-local st arg (pair 'reg' (c-call LLVMGetParam * * f int i)))))))
+            (pair 0 local-state)
+            args)))
+
+   (def local-state^^ (tr body local-state^ tr))
+
+   (c-call LLVMBuildRet * * main-b * (state-cur-value local-state^^)) ; todo care for empty body
+
+   ; todo merge back state
 
    (c-call LLVMPositionBuilderAtEnd void * main-b * prev)
+
    (tr-nil state)))))
 
 (def tr-def
@@ -873,9 +895,13 @@
        (do
          (def var (c-call LLVMAddGlobal * * m * value-type * (symbol-name (head (tail form)))))
          (c-call LLVMSetInitializer void * var * (c-call LLVMConstNull * * value-type))
-         (state-add-global state name var))))
+         (state-add-global state name (pair 'var' var)))))
 
-  (def gl-var (state-get state^ name))
+  (def gl-var (unpair (state-get state^ name)
+               (fn (label var)
+                (if (= 'var' label)
+                 var
+                 (print '[E] expected ' (symbol-name name) ' to be a variable, but actually is ' label)))))
 
   (def val (head (tail (tail form))))
 
