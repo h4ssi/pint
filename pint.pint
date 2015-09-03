@@ -393,9 +393,10 @@
 (def m (c-call LLVMModuleCreateWithNameInContext * * 'real' * c))
 (def int-type (c-call LLVMInt64TypeInContext * * c))
 (def double-type (c-call LLVMDoubleTypeInContext * * c))
+
 (def value-type (c-call LLVMStructCreateNamed * * c * 'value_type'))
 (c-call LLVMStructSetBody void * value-type * (c-array int-type int-type) int 2 int 0)
-(def ptr-type (c-call LLVMInt32TypeInContext * * c))
+
 (def void-type (c-call LLVMVoidTypeInContext * * c))
 
 (def main-f-type (c-call LLVMFunctionType * * void-type * (c-array) int 0 int 0))
@@ -414,6 +415,10 @@
 (def number-type-index (c-call LLVMConstInt * * int-type int 1 int 1)) ; type 1 = number
 (def string-type-index (c-call LLVMConstInt * * int-type int 2 int 1)) ; type 2 = string
 (def c-pointer-type-index (c-call LLVMConstInt * * int-type int 3 int 1)) ; type 3 = c-pointer
+
+(def extract-with-index (fn (val index label) (c-call LLVMBuildExtractValue * * main-b * val int index * label)))
+(def extract-type-index (fn (val label) (extract-with-index val 0 label)))
+(def extract-value      (fn (val label) (extract-with-index val 1 label)))
 
 (def tr-nil (fn (state)
  (state-mk
@@ -542,7 +547,7 @@
   (def get-val (fn ()
                 (c-call LLVMBuildBitCast *
                  * main-b
-                 * (c-call LLVMBuildExtractValue * * main-b * val int 1 * 'extract-double')
+                 * (extract-value val 'extract-double')
                  * double-type
                  * 'convert-double')))
 
@@ -569,7 +574,7 @@
 (def tr-cast-if-target-c-type-is-pointer
  (fn (type val)
   (if (= (symbol '*') type)
-   (c-call LLVMBuildIntToPtr * * main-b * (c-call LLVMBuildExtractValue * * main-b * val int 1 * 'ptr-to-data') * pointer-type * 'cast-to-ptr')
+   (c-call LLVMBuildIntToPtr * * main-b * (extract-value val 'ptr-to-data') * pointer-type * 'cast-to-ptr')
    (c-call LLVMConstNull * * (tr-c-type type)))))
 
 (def tr-cast-from-string-to-c-type tr-cast-if-target-c-type-is-pointer)
@@ -580,7 +585,7 @@
  (fn (state type val)
   (def f (c-call LLVMGetBasicBlockParent * * (c-call LLVMGetInsertBlock * * main-b)))
 
-  (def dyn-type (c-call LLVMBuildExtractValue * * main-b * val int 0 * 'dyn-type'))
+  (def dyn-type (extract-type-index val 'dyn-type'))
   (def merge-block (c-call LLVMAppendBasicBlockInContext * * c * f * 'merge'))
 
   (def c-pointer-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'c-pointer-cast'))
