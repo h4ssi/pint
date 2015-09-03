@@ -413,6 +413,7 @@
 (def nil-type-index (c-call LLVMConstInt * * int-type int 0 int 1)) ; type 0 = nil
 (def number-type-index (c-call LLVMConstInt * * int-type int 1 int 1)) ; type 1 = number
 (def string-type-index (c-call LLVMConstInt * * int-type int 2 int 1)) ; type 2 = string
+(def c-pointer-type-index (c-call LLVMConstInt * * int-type int 3 int 1)) ; type 3 = c-pointer
 
 (def tr-nil (fn (state)
  (state-mk
@@ -563,11 +564,17 @@
    (c-call LLVMBuildFPExt * * main-b * (get-val) * c-type * label)
    (c-call LLVMConstNull * * c-type)))))))
 
-(def tr-cast-from-string-to-c-type
+
+
+(def tr-cast-if-target-c-type-is-pointer
  (fn (type val)
   (if (= (symbol '*') type)
-   (c-call LLVMBuildIntToPtr * * main-b * (c-call LLVMBuildExtractValue * * main-b * val int 1 * 'ptr-to-str-data') * pointer-type * 'pack-ptr')
+   (c-call LLVMBuildIntToPtr * * main-b * (c-call LLVMBuildExtractValue * * main-b * val int 1 * 'ptr-to-data') * pointer-type * 'cast-to-ptr')
    (c-call LLVMConstNull * * (tr-c-type type)))))
+
+(def tr-cast-from-string-to-c-type tr-cast-if-target-c-type-is-pointer)
+
+(def tr-cast-from-c-pointer-to-c-type tr-cast-if-target-c-type-is-pointer)
 
 (def tr-cast-to-c-type ; todo write tests for all combinations!
  (fn (state type val)
@@ -576,8 +583,8 @@
   (def dyn-type (c-call LLVMBuildExtractValue * * main-b * val int 0 * 'dyn-type'))
   (def merge-block (c-call LLVMAppendBasicBlockInContext * * c * f * 'merge'))
 
-  (def string-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'string-cast'))
-  (def switch (c-call LLVMBuildSwitch * * main-b * dyn-type * string-cast-bb int 2))
+  (def c-pointer-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'c-pointer-cast'))
+  (def switch (c-call LLVMBuildSwitch * * main-b * dyn-type * c-pointer-cast-bb int 3))
 
   ; cast from nil
   (def nil-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'nil-cast'))
@@ -593,11 +600,18 @@
   (def number-cast-v (tr-cast-from-number-to-c-type type val))
   (c-call LLVMBuildBr * * main-b * merge-block)
 
-  ; default must be cast from string
+  ; cast from string
+  (def string-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'string-cast'))
+  (c-call LLVMAddCase void * switch * string-type-index * string-cast-bb)
   (c-call LLVMPositionBuilderAtEnd void * main-b * string-cast-bb)
   (def string-cast-v (tr-cast-from-string-to-c-type type val))
   (c-call LLVMBuildBr * * main-b * merge-block)
 
+  ; default must be cast from c-pointer
+  (c-call LLVMPositionBuilderAtEnd void * main-b * c-pointer-cast-bb)
+  (def c-pointer-cast-v (tr-cast-from-c-pointer-to-c-type type val))
+  (c-call LLVMBuildBr * * main-b * merge-block)
+  
   (c-call LLVMPositionBuilderAtEnd void * main-b * merge-block)
 
   (def phi (c-call LLVMBuildPhi * * main-b * (tr-c-type type) * 'c-value'))
@@ -607,12 +621,14 @@
    * (c-array
       nil-cast-v
       number-cast-v
-      string-cast-v)
+      string-cast-v
+      c-pointer-cast-v)
    * (c-array
       nil-cast-bb
       number-cast-bb
-      string-cast-bb)
-   int 3)
+      string-cast-bb
+      c-pointer-cast-bb)
+   int 4)
 
   (state-mk phi (state-global-names state))))
 
@@ -641,6 +657,8 @@
             int 1
             * pack-label)))
 
+  (if (= kind LLVMPointerTypeKind)
+   (build-val c-pointer-type-index (c-call LLVMBuildPtrToInt * * main-b * val * i64-type * 'ptr-to-int'))
   (if (= kind LLVMIntegerTypeKind)
    (build-val number-type-index
     (if (is-type-unsigned type)
@@ -658,7 +676,7 @@
        (= kind LLVMFP128TypeKind)
        (= kind LLVMPPC_FP128TypeKind)))
    (build-val number-type-index (c-call LLVMBuildFPTrunc * * main-b * val * double-type * label))
-   (c-call LLVMConstNull * * value-type))))))) ; todo handle non numeric types
+   (c-call LLVMConstNull * * value-type)))))))) ; todo handle non numeric, non pointer types (are there any?)
 
 (def tr-c-call
  (fn (form state tr)
