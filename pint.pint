@@ -455,7 +455,8 @@
 (def nil-type-index (c-call LLVMConstInt * * int-type int 0 int 1)) ; type 0 = nil
 (def number-type-index (c-call LLVMConstInt * * int-type int 1 int 1)) ; type 1 = number
 (def string-type-index (c-call LLVMConstInt * * int-type int 2 int 1)) ; type 2 = string
-(def c-pointer-type-index (c-call LLVMConstInt * * int-type int 3 int 1)) ; type 3 = c-pointer
+(def function-type-index (c-call LLVMConstInt * * int-type int 3 int 1)) ; type 3 = function
+(def c-pointer-type-index (c-call LLVMConstInt * * int-type int 4 int 1)) ; type 4 = c-pointer
 
 (def extract-with-index (fn (val index label) (c-call LLVMBuildExtractValue * * main-b * val int index * label)))
 (def extract-type-index (fn (val label) (extract-with-index val 0 label)))
@@ -609,8 +610,6 @@
    (c-call LLVMBuildFPExt * * main-b * (get-val) * c-type * label)
    (c-call LLVMConstNull * * c-type)))))))
 
-
-
 (def tr-cast-if-target-c-type-is-pointer
  (fn (type val)
   (if (= (symbol '*') type)
@@ -621,6 +620,8 @@
 
 (def tr-cast-from-c-pointer-to-c-type tr-cast-if-target-c-type-is-pointer)
 
+(def tr-cast-from-function-to-c-type tr-cast-if-target-c-type-is-pointer)
+
 (def tr-cast-to-c-type ; todo write tests for all combinations!
  (fn (state type val)
   (def f (c-call LLVMGetBasicBlockParent * * (c-call LLVMGetInsertBlock * * main-b)))
@@ -629,7 +630,7 @@
   (def merge-block (c-call LLVMAppendBasicBlockInContext * * c * f * 'merge'))
 
   (def c-pointer-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'c-pointer-cast'))
-  (def switch (c-call LLVMBuildSwitch * * main-b * dyn-type * c-pointer-cast-bb int 3))
+  (def switch (c-call LLVMBuildSwitch * * main-b * dyn-type * c-pointer-cast-bb int 4))
 
   ; cast from nil
   (def nil-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'nil-cast'))
@@ -652,6 +653,13 @@
   (def string-cast-v (tr-cast-from-string-to-c-type type val))
   (c-call LLVMBuildBr * * main-b * merge-block)
 
+  ; cast from function
+  (def function-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'function-cast'))
+  (c-call LLVMAddCase void * switch * function-type-index * function-cast-bb)
+  (c-call LLVMPositionBuilderAtEnd void * main-b * function-cast-bb)
+  (def function-cast-v (tr-cast-from-function-to-c-type type val))
+  (c-call LLVMBuildBr * * main-b * merge-block)
+
   ; default must be cast from c-pointer
   (c-call LLVMPositionBuilderAtEnd void * main-b * c-pointer-cast-bb)
   (def c-pointer-cast-v (tr-cast-from-c-pointer-to-c-type type val))
@@ -667,15 +675,33 @@
       nil-cast-v
       number-cast-v
       string-cast-v
+      function-cast-v
       c-pointer-cast-v)
    * (c-array
       nil-cast-bb
       number-cast-bb
       string-cast-bb
+      function-cast-bb
       c-pointer-cast-bb)
-   int 4)
+   int 5)
 
   (state-set-cur-value state phi)))
+
+(def build-val
+ (fn (type-id val)
+  (c-call LLVMBuildInsertValue *
+          * main-b
+          * (c-call LLVMConstNamedStruct *
+                    * value-type
+                    * (c-array type-id (c-call LLVMGetUndef * * i64-type))
+                    int 2)
+          * (c-call LLVMBuildBitCast *
+                    * main-b
+                    * val
+                    * i64-type
+                    * 'convert-to-i64')
+          int 1
+          * pack-label)))
 
 (def tr-cast-from-c-type
  (fn (state type val)
@@ -685,22 +711,6 @@
 
   (def label (str 'cast-' (symbol-name type)))
   (def pack-label (str 'pack-' (symbol-name type)))
-
-  (def build-val
-   (fn (type-id val)
-    (c-call LLVMBuildInsertValue *
-            * main-b
-            * (c-call LLVMConstNamedStruct *
-                      * value-type
-                      * (c-array type-id (c-call LLVMGetUndef * * i64-type))
-                      int 2)
-            * (c-call LLVMBuildBitCast *
-                      * main-b
-                      * val
-                      * i64-type
-                      * 'convert-to-i64')
-            int 1
-            * pack-label)))
 
   (if (= kind LLVMPointerTypeKind)
    (build-val c-pointer-type-index (c-call LLVMBuildPtrToInt * * main-b * val * i64-type * 'ptr-to-int'))
@@ -765,7 +775,6 @@
                    state^
                    (reverse (head typed-args))))
 
-  (print casts newline)
   (def state^^ (fst casts))
   (def c-casted-args (reverse (snd casts)))
 
@@ -878,10 +887,13 @@
    (c-call LLVMBuildRet * * main-b * (state-cur-value local-state^^)) ; todo care for empty body
 
    ; todo merge back state
+   (def state^ state)
 
    (c-call LLVMPositionBuilderAtEnd void * main-b * prev)
 
-   (tr-nil state)))))
+   (def func-pointer (c-call LLVMBuildPtrToInt * * main-b * f * i64-type * 'pack-func-ptr'))
+
+   (state-set-cur-value state^ (build-val function-type-index func-pointer))))))
 
 (def tr-def
  (fn (form state tr)
