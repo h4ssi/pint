@@ -105,6 +105,16 @@
  (fn (l f)
   (f (head l) (tail l))))
 
+(def range
+ (fn (l)
+  (def range^
+   (fn (r i i1 rec)
+    (if (= i 0)
+     r
+     (rec (cons i1 r) i1 (+ i1 (- 1)) rec))))
+
+  (range^ () l (+ l (- 1)) range^)))
+
 (def reduce
   (fn (f i l)
     (def reduce^
@@ -852,6 +862,12 @@
 
    (state-set-cur-value s^ phi))))))))))
 
+(def get-fn-type
+ (fn (num-args)
+   (def arg-t-array (apply c-array (map (fn (arg) value-type) (range num-args))))
+
+   (c-call LLVMFunctionType * * value-type * arg-t-array int num-args int 0)))
+
 (def tr-fn
  (fn (form state tr)
   ; todo check length ok
@@ -859,9 +875,7 @@
   (uncons (tail form) (fn (args body)
    (def num-args (listlen args))
 
-   (def arg-t-array (apply c-array (map (fn (arg) value-type) args)))
-
-   (def fn-t (c-call LLVMFunctionType * * value-type * arg-t-array int num-args int 0))
+   (def fn-t (get-fn-type num-args))
 
    (def f (c-call LLVMAddFunction * * m * '' * fn-t))
 
@@ -927,6 +941,42 @@
 
   state^^))
 
+(def tr-call
+ (fn (form state tr)
+  ; todo check for length
+
+  (uncons form (fn (f args)
+
+  (def f-state (tr (cons f) state tr))
+
+  (def args-state (stap (fn (st arg)
+                        (def st^ (tr (cons arg) st tr))
+                        (pair st^ st^)) ; todo do list in cur-val instead?
+                   f-state
+                   (reverse args)))
+
+  (def state^ (fst args-state))
+  (def arg-states (reverse (snd args-state)))
+
+  (def num-args (listlen arg-states))
+
+  (def f-type (get-fn-type num-args))
+  (def f-ptr-type (c-call LLVMPointerType * * f-type int 0))
+
+  (def target-fn (c-call LLVMBuildIntToPtr *
+                  * main-b
+                  * (extract-value (state-cur-value f-state) 'fn-addr')
+                  * f-ptr-type
+                  * 'fn-addr-to-ptr'))
+
+  (def res (c-call LLVMBuildCall *
+            * main-b
+            * target-fn
+            * (apply c-array (map state-cur-value arg-states))
+            int num-args
+            * 'call-fn'))
+
+  (state-set-cur-value state^ res)))))
 
 (def tr-form
  (fn (form state tr)
@@ -942,7 +992,7 @@
    (if (= (symbol 'fn') (head form))
      (tr-fn form state tr)
 
-   (tr-default state)))))))
+   (tr-call form state tr)))))))
 
 (def tr
   (fn (c)
