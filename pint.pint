@@ -182,9 +182,13 @@
 
     (take-while^ l take-while^)))
 
+(def concat (fn (l r) (reduce (fn (ls el) (cons el ls)) r l)))
+
 (def assoc 
  (fn (m k v)
   (cons k (cons v m))))
+
+(def assocall (fn (m new-m) (concat new-m m)))
 
 (def getk
  (fn (m k)
@@ -410,10 +414,32 @@
 (c-call LLVMPositionBuilderAtEnd void * main-b * main-bb)
 ;(def r (c-call LLVMBuildNSWAdd * * b * (c-call LLVMGetParam * * f int 0) * (c-call LLVMGetParam * * f int 1) * ''))
 
-(def state-mk (fn (cur-val global-names) (cons cur-val (cons global-names))))
-(def state-cur-val (fn (s) (head s)))
-(def state-global-names (fn (s) (head (tail s))))
-(def init-state (fn () (state-mk nil ())))
+(def state-make (fn (current-value
+                     symbol-table         ; including globals
+                     newly-added-globals) ; added within this scope
+                 (cons current-value
+                 (cons symbol-table
+                 (cons newly-added-globals)))))
+
+(def init-state (fn () (state-make nil () ())))
+
+(def state-unmake (fn (s f) (uncons s (fn (cv r)
+                            (uncons r (fn (st r)
+                            (uncons r (fn (na r)
+                            (f cv st na)))))))))I
+
+(def state-cur-value (fn (s) (state-unmake s (fn (cv st na) cv))))
+(def state-sym-table (fn (s) (state-unmake s (fn (cv st na) st))))
+
+(def state-set-cur-value (fn (s cv) (state-unmake s (fn (cv^ st na) (state-make cv st na)))))
+(def state-add-global (fn (s key val) (state-unmake s (fn (cv st na) (state-make cv (assoc st key val) (assoc na key val))))))
+(def state-add-local (fn (s key val) (state-unmake s (fn (cv st na) (state-make cv (assoc st key val) na)))))
+(def state-get (fn (s key) (state-unmake s (fn (cv st na) (getk st key)))))
+(def state-branch (fn (s) (state-unmake s (fn (cv st na) (state-make cv st ())))))
+(def state-merge (fn (base branch)
+                  (state-unmake base (fn (bacv bast bana)
+                  (state-unmake branch (fn (brcv brst brna)
+                   (state-make bacv (assocall bast brna) bana)))))))
 
 (def nil-type-index (c-call LLVMConstInt * * int-type int 0 int 1)) ; type 0 = nil
 (def number-type-index (c-call LLVMConstInt * * int-type int 1 int 1)) ; type 1 = number
@@ -425,26 +451,24 @@
 (def extract-value      (fn (val label) (extract-with-index val 1 label)))
 
 (def tr-nil (fn (state)
- (state-mk
+ (state-set-cur-value state
   (c-call LLVMConstNamedStruct *
     * value-type
     * (c-array
         nil-type-index
         (c-call LLVMConstNull * * int-type))
-    int 2)
-  (state-global-names state))))
+    int 2))))
 
 (def tr-number (fn (number state)
-  (state-mk
+  (state-set-cur-value state
    (c-call LLVMConstNamedStruct *
      * value-type
      * (c-array
          number-type-index
          (c-call LLVMBuildBitCast * * main-b * (c-call LLVMConstReal * * double-type double number) * int-type * 'pack-dbl'))
-     int 2)
-   (state-global-names state))))
+     int 2))))
 
-(def tr-default (fn (state) (tr-number 1337 state)))
+(def tr-default (fn (state) (tr-number 1337 state))) ; todo raise error
 
 (def tr-string (fn (string state)
  (def strval
@@ -460,7 +484,7 @@
     * ''))
  (c-call LLVMSetGlobalConstant void * strmem int 1)
  (c-call LLVMSetInitializer void * strmem * strval)
- (state-mk
+ (state-set-cur-value state
   (c-call LLVMConstNamedStruct *
     * value-type
     * (c-array
@@ -475,17 +499,14 @@
             * 'str to ptr')
          * int-type
          * 'ptr to int'))
-    int 2)
-  (state-global-names state))))
+    int 2))))
 
 (def tr-load
  (fn (sym state)
-  (def glb-nms (state-global-names state))
-
-  (def glb-var (getk glb-nms sym))
+  (def glb-var (state-get state sym))
 
   (if glb-var
-   (state-mk (c-call LLVMBuildLoad * * main-b * glb-var * 'load_from_global') glb-nms)
+   (state-set-cur-value state (c-call LLVMBuildLoad * * main-b * glb-var * 'load_from_global'))
    (do
     (print '[E] unkown variable ' (symbol-name sym) newline)
     (tr-nil state)))))
@@ -639,7 +660,7 @@
       c-pointer-cast-bb)
    int 4)
 
-  (state-mk phi (state-global-names state))))
+  (state-set-cur-value state phi)))
 
 (def tr-cast-from-c-type
  (fn (state type val)
@@ -704,21 +725,20 @@
 
   (def c-casted-args (reverse
                        (map (fn (typed-arg)
-                             (unpair typed-arg (fn (type arg) (tr-cast-to-c-type state type (state-cur-val (tr (cons arg) state tr))))))
+                             (unpair typed-arg (fn (type arg) (tr-cast-to-c-type state type (state-cur-value (tr (cons arg) state tr))))))
                             (reverse (head typed-args)))))
  
   (def is-void (= (symbol 'void') ret-type))
   (def res (c-call LLVMBuildCall *
             * main-b
             * target-fn
-            * (apply c-array (map state-cur-val c-casted-args))
+            * (apply c-array (map state-cur-value c-casted-args))
             int num-args
             * (if is-void '' (str 'call-' (symbol-name fn-name)))))
   (if is-void
    (tr-nil state)
-   (state-mk
-    (tr-cast-from-c-type state ret-type res)
-    (state-global-names state)))))
+   (state-set-cur-value state
+    (tr-cast-from-c-type state ret-type res)))))
 
 ; LLVMIntPredicate
 (def LLVMIntEQ 32)  ; equal
@@ -743,7 +763,7 @@
 
    (def s^ (tr (cons cond) state tr))
 
-   (def cond-v (state-cur-val s^))
+   (def cond-v (state-cur-value s^))
 
    (def cond-true? (c-call LLVMBuildICmp * * main-b int LLVMIntNE * (extract-type-index cond-v 'if-cond-type') * nil-type-index * 'if-cond'))
 
@@ -770,14 +790,14 @@
    (c-call LLVMAddIncoming void
     * phi
     * (c-array
-       (state-cur-val s^then)
-       (state-cur-val s^else))
+       (state-cur-value s^then)
+       (state-cur-value s^else))
    * (c-array
       then-bb
       else-bb)
    int 2)
 
-   (state-mk phi (state-global-names s^)))))))))))
+   (state-set-cur-value s^ phi))))))))))
 
 (def tr-fn
  (fn (form state tr)
@@ -796,39 +816,44 @@
 
    (def bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'entry'))
    (c-call LLVMPositionBuilderAtEnd void * main-b * bb)
-   (c-call LLVMBuildRet * * main-b * (state-cur-val (tr-nil state)))
+   (c-call LLVMBuildRet * * main-b * (state-cur-value (tr-nil state)))
 
    (c-call LLVMPositionBuilderAtEnd void * main-b * prev)
    (tr-nil state)))))
 
+(def tr-def
+ (fn (form state tr)
+  ; todo: distinguish between global and local defs
+
+  (def name (head (tail form)))
+
+  (def state^
+     (if (state-get state name)
+       state
+       (do
+         (def var (c-call LLVMAddGlobal * * m * value-type * (symbol-name (head (tail form)))))
+         (c-call LLVMSetInitializer void * var * (c-call LLVMConstNull * * value-type))
+         (state-add-global state name var))))
+
+  (def gl-var (state-get state^ name))
+
+  (def val (head (tail (tail form))))
+
+  (def state^^
+   (state-set-cur-value state^
+    (if (nil? val)
+     (state-cur-value (tr-nil state^))
+     (state-cur-value (tr (cons val) state^ tr)))))
+
+  (c-call LLVMBuildStore * * main-b * (state-cur-value state^^) * gl-var)
+
+  state^^))
+
+
 (def tr-form
  (fn (form state tr)
-   (def glb-nms (state-global-names state))
-
-   (if (= (symbol 'def') (head form)) ; todo: distinguish between global and local defs
-     (do
-       (def name (head (tail form)))
-       (def glb-nms^ 
-          (if (getk glb-nms name)
-            glb-nms
-            (do
-              (def var (c-call LLVMAddGlobal * * m * value-type * (symbol-name (head (tail form)))))
-              (c-call LLVMSetInitializer void * var * (c-call LLVMConstNull * * value-type))
-              (assoc glb-nms name var))))
-
-       (def gl-var (getk glb-nms^ name))
-       
-       (def val (head (tail (tail form))))
-
-       (def state^ (state-mk nil glb-nms^))
-       (def state^ 
-         (if (nil? val)
-            (tr-nil state^)
-            (tr (cons val) state^ tr)))
-
-       (c-call LLVMBuildStore * * main-b * (state-cur-val state^) * gl-var)
-
-       state^)
+   (if (= (symbol 'def') (head form))
+     (tr-def form state tr)
 
    (if (= (symbol 'c-call') (head form))
      (tr-c-call form state tr)
