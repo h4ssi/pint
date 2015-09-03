@@ -779,6 +779,28 @@
 
    (state-mk phi (state-global-names s^)))))))))))
 
+(def tr-fn
+ (fn (form state tr)
+  ; todo check length ok
+
+  (uncons (tail form) (fn (args body)
+   (def num-args (listlen args))
+
+   (def arg-t-array (apply c-array (map (fn (arg) value-type) args)))
+
+   (def fn-t (c-call LLVMFunctionType * * value-type * arg-t-array int num-args int 0))
+
+   (def f (c-call LLVMAddFunction * * m * '' * fn-t))
+
+   (def prev (c-call LLVMGetInsertBlock * * main-b))
+
+   (def bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'entry'))
+   (c-call LLVMPositionBuilderAtEnd void * main-b * bb)
+   (c-call LLVMBuildRet * * main-b * (state-cur-val (tr-nil state)))
+
+   (c-call LLVMPositionBuilderAtEnd void * main-b * prev)
+   (tr-nil state)))))
+
 (def tr-form
  (fn (form state tr)
    (def glb-nms (state-global-names state))
@@ -814,7 +836,10 @@
    (if (= (symbol 'if') (head form))
      (tr-if form state tr)
 
-   (tr-default state))))))
+   (if (= (symbol 'fn') (head form))
+     (tr-fn form state tr)
+
+   (tr-default state)))))))
 
 (def tr
   (fn (c)
