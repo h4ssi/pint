@@ -211,6 +211,10 @@
  (fn (p f)
   (f (head p) (head (tail p)))))
 
+(def uncons
+ (fn (l f)
+  (f (head l) (tail l))))
+
 (def split
  (fn (count list)
   
@@ -716,6 +720,65 @@
     (tr-cast-from-c-type state ret-type res)
     (state-global-names state)))))
 
+; LLVMIntPredicate
+(def LLVMIntEQ 32)  ; equal
+(def LLVMIntNE 33)  ; not equal
+(def LLVMIntUGT 34) ; unsigned greater than
+(def LLVMIntUGE 35) ; unsigned greater or equal
+(def LLVMIntULT 36) ; unsigned less than
+(def LLVMIntULE 37) ; unsigned less or equal
+(def LLVMIntSGT 38) ; signed greater than
+(def LLVMIntSGE 39) ; signed greater or equal
+(def LLVMIntSLT 40) ; signed less than
+(def LLVMIntSLE 41) ; signed less or equal
+
+(def tr-if
+ (fn (form state tr)
+  (if (not (= (listlen form) 4))
+   (print '[E] expected: if <cond> <then> <else>' newline)
+
+   (uncons (tail form) (fn (cond r)
+   (uncons r (fn (then r)
+   (uncons r (fn (else r)
+
+   (def s^ (tr (cons cond) state tr))
+
+   (def cond-v (state-cur-val s^))
+
+   (def cond-true? (c-call LLVMBuildICmp * * main-b int LLVMIntNE * (extract-type-index cond-v 'if-cond-type') * nil-type-index * 'if-cond'))
+
+   (def f (c-call LLVMGetBasicBlockParent * * (c-call LLVMGetInsertBlock * * main-b)))
+
+   (def then-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'if-then'))
+   (def else-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'if-else'))
+   (def merge-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'if-merge'))
+
+   (c-call LLVMBuildCondBr * * main-b * cond-true? * then-bb * else-bb)
+
+   (c-call LLVMPositionBuilderAtEnd void * main-b * then-bb)
+   (def s^then (tr (cons then) s^ tr))
+   (c-call LLVMBuildBr * * main-b * merge-bb)
+
+   (c-call LLVMPositionBuilderAtEnd void * main-b * else-bb)
+   (def s^else (tr (cons else) s^ tr))
+   (c-call LLVMBuildBr * * main-b * merge-bb)
+
+   (c-call LLVMPositionBuilderAtEnd void * main-b * merge-bb)
+
+   (def phi (c-call LLVMBuildPhi * * main-b * value-type * 'if-result'))
+
+   (c-call LLVMAddIncoming void
+    * phi
+    * (c-array
+       (state-cur-val s^then)
+       (state-cur-val s^else))
+   * (c-array
+      then-bb
+      else-bb)
+   int 2)
+
+   (state-mk phi (state-global-names s^)))))))))))
+
 (def tr-form
  (fn (form state tr)
    (def glb-nms (state-global-names state))
@@ -744,9 +807,14 @@
        (c-call LLVMBuildStore * * main-b * (state-cur-val state^) * gl-var)
 
        state^)
+
    (if (= (symbol 'c-call') (head form))
      (tr-c-call form state tr)
-   (tr-default state)))))
+
+   (if (= (symbol 'if') (head form))
+     (tr-if form state tr)
+
+   (tr-default state))))))
 
 (def tr
   (fn (c)
