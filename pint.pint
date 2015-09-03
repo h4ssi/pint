@@ -715,7 +715,7 @@
  (fn (form state tr)
    (def glb-nms (state-global-names state))
 
-   (if (= (symbol 'def') (head form))
+   (if (= (symbol 'def') (head form)) ; todo: distinguish between global and local defs
      (do
        (def name (head (tail form)))
        (def glb-nms^ 
