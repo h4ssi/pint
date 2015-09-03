@@ -90,6 +90,21 @@
 
 (def empty? (fn (l) (nil? (tail l))))
 
+(def pair
+  (fn (l r)
+    (cons l (cons r))))
+
+(def unpair
+ (fn (p f)
+  (f (head p) (head (tail p)))))
+
+(def fst (fn (p) (unpair p (fn (f s) f))))
+(def snd (fn (p) (unpair p (fn (f s) s))))
+
+(def uncons
+ (fn (l f)
+  (f (head l) (tail l))))
+
 (def reduce
   (fn (f i l)
     (def reduce^
@@ -132,9 +147,17 @@
 (def map
   (fn (t l)
     (reduce
-      (fn (res i)
-        (cons (t i) res))
+      (fn (res e)
+        (cons (t e) res))
       ()
+      l)))
+
+(def stap
+  (fn (t i l)
+    (reduce
+      (fn (st-res e) (unpair st-res (fn (st res) (unpair (t st e) (fn (st^ e^)
+       (pair st^ (cons e^ res)))))))
+      (pair i ())
       l)))
 
 (def in-list
@@ -206,18 +229,6 @@
 (def testmap (assoc (assoc (assoc () 'a' 1) 'b' 2) 'a' 3))
 (print (getk testmap 'a') newline) ; should be 3
 (print (getk testmap 'b') newline) ; should be 2
-
-(def pair
-  (fn (l r)
-    (cons l (cons r))))
-
-(def unpair
- (fn (p f)
-  (f (head p) (head (tail p)))))
-
-(def uncons
- (fn (l f)
-  (f (head l) (tail l))))
 
 (def split
  (fn (count list)
@@ -708,26 +719,54 @@
    (build-val number-type-index (c-call LLVMBuildFPTrunc * * main-b * val * double-type * label))
    (c-call LLVMConstNull * * value-type)))))))) ; todo handle non numeric, non pointer types (are there any?)
 
-(def tr-c-call
- (fn (form state tr)
-  (def fn-name (head (tail form)))
-  (def ret-type (head (tail (tail form))))
-  (def typed-args (chunk 2 (tail (tail (tail form)))))
-
+(def tr-declare-c-fn
+ (fn (name ret-type arg-types)
   (def ret-c-type (tr-c-type ret-type))
-  (def c-typed-args (map (fn (arg) (unpair arg (fn (type name) (tr-c-type type)))) (head typed-args))) ; care for wrongly chunked!
+
+  (def c-typed-args (map (fn (type) (tr-c-type type)) arg-types))
   (def num-args (listlen c-typed-args))
   
   (def arg-t-array (apply c-array c-typed-args))
   (def fn-t (c-call LLVMFunctionType * * ret-c-type * arg-t-array int num-args int 0))
 
-  (def target-fn (c-call LLVMAddFunction * * m * (symbol-name fn-name) * fn-t))
+  (c-call LLVMAddFunction * * m * (symbol-name name) * fn-t)))
 
-  (def c-casted-args (reverse
-                       (map (fn (typed-arg)
-                             (unpair typed-arg (fn (type arg) (tr-cast-to-c-type state type (state-cur-value (tr (cons arg) state tr))))))
-                            (reverse (head typed-args)))))
- 
+(def tr-c-call
+ (fn (form state tr)
+  (def fn-name (head (tail form)))
+
+  (def ret-type (head (tail (tail form))))
+  (def typed-args (chunk 2 (tail (tail (tail form))))) ; care for wrongly chunked!
+
+  (def state^
+   (if (state-get state fn-name)
+    state
+    (state-add-global state fn-name (pair 'c-fn' (tr-declare-c-fn
+                                                   fn-name
+                                                   ret-type
+                                                   (map (fn (arg) (unpair arg (fn (type name) type))) (head typed-args)))))))
+
+  (def entry (state-get state^ fn-name))
+
+  (def target-fn (unpair entry (fn (label val)
+                                (if (= label 'c-fn')
+                                 val
+                                 (print '[E] not a C fn: ' (symbol-name fn-name) newline)))))
+
+  (def casts (stap (fn (st typed-arg)
+                    (unpair typed-arg
+                     (fn (type arg)
+                      (def st^ (tr (cons arg) st tr))
+                      (pair st^ (tr-cast-to-c-type st^ type (state-cur-value st^))))))
+                   state^
+                   (reverse (head typed-args))))
+
+  (print casts newline)
+  (def state^^ (fst casts))
+  (def c-casted-args (reverse (snd casts)))
+
+  (def num-args (listlen c-casted-args))
+
   (def is-void (= (symbol 'void') ret-type))
   (def res (c-call LLVMBuildCall *
             * main-b
@@ -735,10 +774,11 @@
             * (apply c-array (map state-cur-value c-casted-args))
             int num-args
             * (if is-void '' (str 'call-' (symbol-name fn-name)))))
+
   (if is-void
-   (tr-nil state)
-   (state-set-cur-value state
-    (tr-cast-from-c-type state ret-type res)))))
+   (tr-nil state^^)
+   (state-set-cur-value state^^
+    (tr-cast-from-c-type state^^ ret-type res)))))
 
 ; LLVMIntPredicate
 (def LLVMIntEQ 32)  ; equal
