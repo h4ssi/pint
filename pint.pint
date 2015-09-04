@@ -489,6 +489,8 @@
 
 ; todo op to borrow sym
 
+(def state-can-borrow (fn (s) (state-unmake s (fn (cv pt ba st bs gl) ba))))
+
 (def state-branch-direct (fn (s) (state-unmake s (fn (cv pt ba st bs gl)
                                  (state-make cv s ba st bs gl)))))
 (def state-branch-borrow (fn (s) (state-unmake s (fn (cv pt ba st bs gl)
@@ -960,17 +962,18 @@
 
    (state-set-cur-value state^ (build-val function-type-index func-pointer))))))
 
-(def tr-def
- (fn (form state tr)
-  ; todo: distinguish between global and local defs
+(def tr-def-local
+ (fn (name state)
+  (state-add-local state name (state-cur-value state))))
 
-  (def name (head (tail form)))
+(def tr-def-global
+ (fn (name state)
 
   (def state^
      (if (state-get-global state name)
        state
        (do
-         (def var (c-call LLVMAddGlobal * * m * value-type * (symbol-name (head (tail form)))))
+         (def var (c-call LLVMAddGlobal * * m * value-type * (symbol-name name)))
          (c-call LLVMSetInitializer void * var * (c-call LLVMConstNull * * value-type))
          (state-add-global state name (pair 'var' var)))))
 
@@ -980,17 +983,24 @@
                  var
                  (print '[E] expected ' (symbol-name name) ' to be a variable, but actually is ' label)))))
 
-  (def val (head (tail (tail form))))
+  (c-call LLVMBuildStore * * main-b * (state-cur-value state) * gl-var)
 
-  (def state^^
-   (state-set-cur-value state^
-    (if (nil? val)
-     (state-cur-value (tr-nil state^))
-     (state-cur-value (tr (cons val) state^ tr)))))
+  state^))
 
-  (c-call LLVMBuildStore * * main-b * (state-cur-value state^^) * gl-var)
+(def tr-def
+ (fn (form state tr)
+  (def name (head (tail form)))
 
-  state^^))
+  (def build (fn ()
+   (def val (head (tail (tail form))))
+
+   (if (nil? val)
+    (tr-nil state)
+    (tr (cons val) state tr))))
+
+  (if (state-can-borrow state) ; is local var enough?
+   (tr-def-local name (build))
+   (tr-def-global name (build)))))
 
 (def tr-call
  (fn (form state tr)
