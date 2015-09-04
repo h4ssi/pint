@@ -435,32 +435,73 @@
 (c-call LLVMPositionBuilderAtEnd void * main-b * main-bb)
 ;(def r (c-call LLVMBuildNSWAdd * * b * (c-call LLVMGetParam * * f int 0) * (c-call LLVMGetParam * * f int 1) * ''))
 
-(def state-make (fn (current-value
-                     symbol-table         ; including globals
-                     newly-added-globals) ; added within this scope
-                 (cons current-value
-                 (cons symbol-table
-                 (cons newly-added-globals)))))
+; state during code gen
+; contains
+;   "accumulator" (current-val)
+;   symbol table for each scope
+;   globals
+;   a list of borrowed values from an upper scope
+; 2 kinds of scope are supported:
+;   scope which can freely access parent scope
+;   scope which needs to explicitly borrow refs from parent scope
+; supported operations
+;   set/get accumulator
+;   set/get symbols from sym tab or globals
+;   test whether there is an upper state to borrow from (am i root?)
+;   borrow value from _some_ upper parent
+;   branch new state (new scope)
+;   merge back
 
-(def init-state (fn () (state-make nil () ())))
+(def state-make (fn (current-value
+                     parent-state    ; (direct) parent
+                     borrow-ancestor ; ancestor to borrow from (maybe parent, maybe not)
+                     symbol-table    ; one frame for each scope
+                     borrowed-syms
+                     globals)
+                 (cons current-value
+                 (cons parent-state
+                 (cons borrow-ancestor
+                 (cons symbol-table
+                 (cons borrowed-syms
+                 (cons globals))))))))
+
+(def init-state (fn () (state-make nil nil nil () nil ())))
 
 (def state-unmake (fn (s f) (uncons s (fn (cv r)
+                            (uncons r (fn (pt r)
+                            (uncons r (fn (ba r)
                             (uncons r (fn (st r)
-                            (uncons r (fn (na r)
-                            (f cv st na)))))))))I
+                            (uncons r (fn (bs r)
+                            (uncons r (fn (gl r)
+                            (f cv pt ba st bs gl)))))))))))))))
 
-(def state-cur-value (fn (s) (state-unmake s (fn (cv st na) cv))))
-(def state-sym-table (fn (s) (state-unmake s (fn (cv st na) st))))
+(def state-cur-value (fn (s) (state-unmake s (fn (cv pt ba st bs gl) cv))))
+(def state-set-cur-value (fn (s cv) (state-unmake s (fn (cv^ pt ba st bs gl)
+                                    (state-make cv pt ba st bs gl)))))
 
-(def state-set-cur-value (fn (s cv) (state-unmake s (fn (cv^ st na) (state-make cv st na)))))
-(def state-add-global (fn (s key val) (state-unmake s (fn (cv st na) (state-make cv (assoc st key val) (assoc na key val))))))
-(def state-add-local (fn (s key val) (state-unmake s (fn (cv st na) (state-make cv (assoc st key val) na)))))
-(def state-get (fn (s key) (state-unmake s (fn (cv st na) (getk st key)))))
-(def state-branch (fn (s) (state-unmake s (fn (cv st na) (state-make cv st ())))))
-(def state-merge (fn (base branch)
-                  (state-unmake base (fn (bacv bast bana)
-                  (state-unmake branch (fn (brcv brst brna)
-                   (state-make bacv (assocall bast brna) bana)))))))
+(def state-get-global (fn (s key) (state-unmake s (fn (cv pt ba st bs gl) (getk gl key)))))
+(def state-add-global (fn (s key val) (state-unmake s (fn (cv pt ba st bs gl)
+                                      (state-make cv pt ba st bs (assoc gl key val))))))
+
+(def state-get-local (fn (s key) (state-unmake s (fn (cv pt ba st bs gl) (getk st key)))))
+(def state-add-local (fn (s key val) (state-unmake s (fn (cv pt ba st bs gl)
+                                     (state-make cv pt ba (assoc st key val) bs gl)))))
+
+; todo op to borrow sym
+
+(def state-branch-direct (fn (s) (state-unmake s (fn (cv pt ba st bs gl)
+                                 (state-make cv s ba st bs gl)))))
+(def state-branch-borrow (fn (s) (state-unmake s (fn (cv pt ba st bs gl)
+                                 (state-make cv s s () () gl)))))
+
+(def state-branch-is-borrow (fn (s) (state-unmake s (fn (cv pt ba st bs gl) (= pt ba)))))
+
+(def state-merge (fn (s)
+                  (state-unmake s  (fn ( cv  pt  ba  st  bs  gl)
+                  (state-unmake pt (fn (pcv ppt pba pst pbs pgl)
+                   (if (state-branch-is-borrow s)
+                    (state-make pcv ppt pba pst pbs gl)
+                    (state-make pcv ppt pba pst  bs gl)))))))) ; todo merge strat for accumulator?
 
 (def nil-type-index (c-call LLVMConstInt * * int-type int 0 int 1)) ; type 0 = nil
 (def number-type-index (c-call LLVMConstInt * * int-type int 1 int 1)) ; type 1 = number
@@ -532,17 +573,19 @@
 
 (def tr-load
  (fn (sym state)
-  (def var (state-get state sym))
-  (if var
-   (unpair var (fn (label val)
-    (if (= 'reg' label)
-     (state-set-cur-value state val)
-    (if (= 'var' label)
-     (state-set-cur-value state (c-call LLVMBuildLoad * * main-b * val * 'load_from_var'))
-    (print '[E] expected ' (symbol-name sym) ' to be a variable, actually is ' label newline)))))
+  (def lcl (state-get-local state sym))
+  (if lcl
+   (state-set-cur-value state lcl)
    (do
-    (print '[E] unkown variable ' (symbol-name sym) newline)
-    (tr-nil state)))))
+    (def glb (state-get-global state sym))
+    (if glb
+     (unpair glb (fn (label val)
+      (if (= 'var' label)
+       (state-set-cur-value state (c-call LLVMBuildLoad * * main-b * val * 'load_from_var'))
+       (print '[E] expected ' (symbol-name sym) ' to be a variable, actually is ' label newline))))
+     (do
+      (print '[E] unknown variable ' (symbol-name sym) newline)
+      (tr-nil state)))))))
 
 ; LLVMTypeKind
 (def LLVMVoidTypeKind 0) ; type with no size
@@ -769,14 +812,14 @@
   (def typed-args (chunk 2 (tail (tail (tail form))))) ; care for wrongly chunked!
 
   (def state^
-   (if (state-get state fn-name)
+   (if (state-get-global state fn-name)
     state
     (state-add-global state fn-name (pair 'c-fn' (tr-declare-c-fn
                                                    fn-name
                                                    ret-type
                                                    (map (fn (arg) (unpair arg (fn (type name) type))) (head typed-args)))))))
 
-  (def entry (state-get state^ fn-name))
+  (def entry (state-get-global state^ fn-name))
 
   (def target-fn (unpair entry (fn (label val)
                                 (if (= label 'c-fn')
@@ -845,11 +888,14 @@
    (c-call LLVMBuildCondBr * * main-b * cond-true? * then-bb * else-bb)
 
    (c-call LLVMPositionBuilderAtEnd void * main-b * then-bb)
-   (def s^then (tr (cons then) s^ tr))
+   (def s^then (tr (cons then) (state-branch-direct s^) tr))
+   (def s^^ (state-merge s^then))
    (c-call LLVMBuildBr * * main-b * merge-bb)
 
+
    (c-call LLVMPositionBuilderAtEnd void * main-b * else-bb)
-   (def s^else (tr (cons else) s^ tr))
+   (def s^else (tr (cons else) (state-branch-direct s^^) tr))
+   (def s^^^ (state-merge s^else))
    (c-call LLVMBuildBr * * main-b * merge-bb)
 
    (c-call LLVMPositionBuilderAtEnd void * main-b * merge-bb)
@@ -866,7 +912,7 @@
       else-bb)
    int 2)
 
-   (state-set-cur-value s^ phi))))))))))
+   (state-set-cur-value s^^^ phi))))))))))
 
 (def get-fn-type
  (fn (num-args)
@@ -890,7 +936,7 @@
    (def bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'entry'))
    (c-call LLVMPositionBuilderAtEnd void * main-b * bb)
 
-   (def local-state (state-branch state))
+   (def local-state (state-branch-borrow state))
 
    (def local-state^
     (snd
@@ -898,7 +944,7 @@
              (unpair s (fn (i st)
               (pair
                (+ i 1)
-               (state-add-local st arg (pair 'reg' (c-call LLVMGetParam * * f int i)))))))
+               (state-add-local st arg (c-call LLVMGetParam * * f int i))))))
             (pair 0 local-state)
             args)))
 
@@ -906,8 +952,7 @@
 
    (c-call LLVMBuildRet * * main-b * (state-cur-value local-state^^)) ; todo care for empty body
 
-   ; todo merge back state
-   (def state^ state)
+   (def state^ (state-merge state))
 
    (c-call LLVMPositionBuilderAtEnd void * main-b * prev)
 
@@ -922,14 +967,14 @@
   (def name (head (tail form)))
 
   (def state^
-     (if (state-get state name)
+     (if (state-get-global state name)
        state
        (do
          (def var (c-call LLVMAddGlobal * * m * value-type * (symbol-name (head (tail form)))))
          (c-call LLVMSetInitializer void * var * (c-call LLVMConstNull * * value-type))
          (state-add-global state name (pair 'var' var)))))
 
-  (def gl-var (unpair (state-get state^ name)
+  (def gl-var (unpair (state-get-global state^ name)
                (fn (label var)
                 (if (= 'var' label)
                  var
