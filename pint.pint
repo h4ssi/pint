@@ -177,6 +177,16 @@
 (def in-str
   (fn (c string) (in-list c (to-list string))))
 
+(def indexof (fn (el li)
+ (def indexof^ (fn (l i rec)
+  (if (empty? l)
+   nil
+   (uncons l (fn (h t)
+    (if (= el h)
+     i
+     (rec t (+ i 1) rec)))))))
+ (indexof^ li 0 indexof^)))
+
 (def is-whitespace
   (fn (x) (in-str x whitespace)))
 (def is-newline
@@ -487,7 +497,27 @@
 (def state-add-local (fn (s key val) (state-unmake s (fn (cv pt ba st bs gl)
                                      (state-make cv pt ba (assoc st key val) bs gl)))))
 
-; todo op to borrow sym
+(def state-borrow (fn (s sym)
+ (def sb^ (fn (c rec)
+  (if (nil? c)
+   nil
+   (state-unmake c (fn (cv pt ba st bs gl)
+    (def ref (getk st sym))
+
+    (if ref
+     ref
+     (rec ba rec)))))))
+
+ (state-unmake s (fn (cv pt ba st bs gl)
+  (if (in-list bs sym) ; already borrowed?
+   s
+   (if (or (sb^ ba sb^) (getk gl sym))
+    (state-make cv pt ba st (reverse (cons sym (reverse bs))) gl)
+    (print '[E] undefined var: ' (symbol-name sym) newline)))))))
+
+(def state-borrow-index (fn (s sym)
+ (state-unmake s (fn (cv pt ba st bs gl)
+  (indexof sym bs)))))
 
 (def state-can-borrow (fn (s) (state-unmake s (fn (cv pt ba st bs gl) ba))))
 
@@ -579,11 +609,15 @@
   (if lcl
    (state-set-cur-value state lcl)
    (do
-    (def glb (state-get-global state sym))
+    (def s^ (state-borrow state sym))
+    (if s^ ; todo load from frame
+     (print '[I] ' (symbol-name sym) ' borrow index: ' (state-borrow-index s^ sym) newline)
+     (print '[W] ' (symbol-name sym) ' not found!' newline))
+    (def glb (state-get-global s^ sym))
     (if glb
      (unpair glb (fn (label val)
       (if (= 'var' label)
-       (state-set-cur-value state (c-call LLVMBuildLoad * * main-b * val * 'load_from_var'))
+       (state-set-cur-value s^ (c-call LLVMBuildLoad * * main-b * val * 'load_from_var'))
        (print '[E] expected ' (symbol-name sym) ' to be a variable, actually is ' label newline))))
      (do
       (print '[E] unknown variable ' (symbol-name sym) newline)
@@ -954,6 +988,7 @@
 
    (c-call LLVMBuildRet * * main-b * (state-cur-value local-state^^)) ; todo care for empty body
 
+   ; todo copy borrowed vars onto frame
    (def state^ (state-merge state))
 
    (c-call LLVMPositionBuilderAtEnd void * main-b * prev)
@@ -1036,6 +1071,7 @@
                   * f-ptr-type
                   * 'fn-addr-to-ptr'))
 
+  ; todo call with frame
   (def res (c-call LLVMBuildCall *
             * main-b
             * target-fn
