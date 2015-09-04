@@ -969,12 +969,18 @@
 (def tr-def-global
  (fn (name state)
 
+  (def val (state-cur-value state))
+
   (def state^
      (if (state-get-global state name)
        state
        (do
          (def var (c-call LLVMAddGlobal * * m * value-type * (symbol-name name)))
-         (c-call LLVMSetInitializer void * var * (c-call LLVMConstNull * * value-type))
+         (c-call LLVMSetInitializer void * var *
+          (if (= 0 (c-call LLVMIsConstant int * val))
+           (c-call LLVMConstNull * * value-type)
+           val))
+
          (state-add-global state name (pair 'var' var)))))
 
   (def gl-var (unpair (state-get-global state^ name)
@@ -983,7 +989,7 @@
                  var
                  (print '[E] expected ' (symbol-name name) ' to be a variable, but actually is ' label)))))
 
-  (c-call LLVMBuildStore * * main-b * (state-cur-value state) * gl-var)
+  (c-call LLVMBuildStore * * main-b * val * gl-var)
 
   state^))
 
