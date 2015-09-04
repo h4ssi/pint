@@ -468,6 +468,13 @@
 (def function-type-index (c-call LLVMConstInt * * int-type int 3 int 1)) ; type 3 = function
 (def c-pointer-type-index (c-call LLVMConstInt * * int-type int 4 int 1)) ; type 4 = c-pointer
 
+(def type-index-friendly-name (fn (idx) (if (= nil-type-index idx) 'nil'
+                                        (if (= number-type-index idx) 'number'
+                                        (if (= string-type-index idx) 'string'
+                                        (if (= function-type-index idx) 'function'
+                                        (if (= c-pointer-type-index idx) 'c-pointer'
+                                        'value')))))))
+
 (def extract-with-index (fn (val index label) (c-call LLVMBuildExtractValue * * main-b * val int index * label)))
 (def extract-type-index (fn (val label) (extract-with-index val 0 label)))
 (def extract-value      (fn (val label) (extract-with-index val 1 label)))
@@ -711,7 +718,7 @@
                     * i64-type
                     * 'convert-to-i64')
           int 1
-          * pack-label)))
+          * (str 'packed-' (type-index-friendly-name type-id)))))
 
 (def tr-cast-from-c-type
  (fn (state type val)
@@ -720,7 +727,6 @@
   (def kind (c-call LLVMGetTypeKind int * c-type))
 
   (def label (str 'cast-' (symbol-name type)))
-  (def pack-label (str 'pack-' (symbol-name type)))
 
   (if (= kind LLVMPointerTypeKind)
    (build-val c-pointer-type-index (c-call LLVMBuildPtrToInt * * main-b * val * i64-type * 'ptr-to-int'))
