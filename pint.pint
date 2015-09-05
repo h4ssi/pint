@@ -1008,12 +1008,20 @@
                    * 'alloc-frame'))
    ; todo memory management & free!!!
    (def frame (c-call LLVMBuildBitCast * * main-b * frame-mem * (c-call LLVMPointerType * * frame-type int 0) * 'cast-to-frame-ptr'))
+   (def index-make (fn (index) (c-call LLVMConstInt * * i32-type int index int 0)))
    (def state^^
     (snd
     (leduce (fn (p borrowed)
              (unpair p (fn (i s)
               (def s^ (tr-load borrowed s))
               ; todo codegen store load into frame
+              (def loc (c-call LLVMBuildInBoundsGEP *
+                        * main-b
+                        * frame
+                        * (c-array (index-make 0) (index-make 1) (index-make i))
+                        int 3
+                        * (str 'capture-' (symbol-name borrowed) '-addr')))
+              (c-call LLVMBuildStore * * main-b * (state-cur-value s^) * loc)
               (pair (+ i 1) s^))))
             (pair 0 state^)
             borrows)))
