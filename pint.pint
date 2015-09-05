@@ -646,6 +646,13 @@
 (def float-type (c-call LLVMFloatTypeInContext * * c))
 (def pointer-type (c-call LLVMPointerType * * i8-type int 0))
 
+(def frame-type (c-call LLVMStructCreateNamed * * c * 'frame_type'))
+(c-call LLVMStructSetBody void
+ * frame-type
+ * (c-array pointer-type (c-call LLVMArrayType * * value-type int 0))
+ int 2
+ int 0)
+
 (def tr-c-type
  (fn (type)
   (if (= (symbol 'void') type)
@@ -838,6 +845,9 @@
 
   (c-call LLVMAddFunction * * m * (symbol-name name) * fn-t)))
 
+(def state-add-global-fn (fn (state fn-name ret-type arg-types)
+ (state-add-global state fn-name (pair 'c-fn' (tr-declare-c-fn fn-name ret-type arg-types)))))
+
 (def tr-c-call
  (fn (form state tr)
   (def fn-name (head (tail form)))
@@ -848,10 +858,7 @@
   (def state^
    (if (state-get-global state fn-name)
     state
-    (state-add-global state fn-name (pair 'c-fn' (tr-declare-c-fn
-                                                   fn-name
-                                                   ret-type
-                                                   (map (fn (arg) (unpair arg (fn (type name) type))) (head typed-args)))))))
+    (state-add-global-fn state fn-name ret-type (map fst (head typed-args)))))
 
   (def entry (state-get-global state^ fn-name))
 
@@ -988,7 +995,19 @@
 
    (def state^ (state-merge state))
 
+   (c-call LLVMPositionBuilderAtEnd void * main-b * prev)
+
    (print '[I] assembling closure frame: ' (state-borrow-list local-state^^) newline)
+   (def borrows (state-borrow-list local-state^^))
+   (def frame-size (+ 8 (* 16 (listlen borrows))))
+   (def frame-mem (c-call LLVMBuildCall *
+                   * main-b
+                   * (snd (state-get-global state^ (quote malloc)))
+                   * (c-array (c-call LLVMConstInt * * i32-type int frame-size int 0))
+                   int 1
+                   * 'alloc-frame'))
+   ; todo memory management & free!!!
+   (def frame (c-call LLVMBuildBitCast * * main-b * frame-mem * (c-call LLVMPointerType * * frame-type int 0) * 'cast-to-frame-ptr'))
    (def state^^
     (snd
     (leduce (fn (p borrowed)
@@ -997,10 +1016,8 @@
               ; todo codegen store load into frame
               (pair (+ i 1) s^))))
             (pair 0 state^)
-            (state-borrow-list local-state^^))))
+            borrows)))
    (print '[I] done' newline)
-
-   (c-call LLVMPositionBuilderAtEnd void * main-b * prev)
 
    (def func-pointer (c-call LLVMBuildPtrToInt * * main-b * f * i64-type * 'pack-func-ptr'))
 
@@ -1126,7 +1143,7 @@
          (rec t state rec)
        ) (head c) (tail c)))))
 
-    (tr^ c (init-state) tr^)))
+    (tr^ c (state-add-global-fn (init-state) (quote malloc) (quote *) (cons (quote uint))) tr^)))
 
 (tr code)
 
