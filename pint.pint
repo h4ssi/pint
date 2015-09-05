@@ -515,9 +515,7 @@
     (state-make cv pt ba st (reverse (cons sym (reverse bs))) gl)
     (print '[E] undefined var: ' (symbol-name sym) newline)))))))
 
-(def state-borrow-index (fn (s sym)
- (state-unmake s (fn (cv pt ba st bs gl)
-  (indexof sym bs)))))
+(def state-borrow-list (fn (s) (state-unmake s (fn (cv pt ba st bs gl) bs))))
 
 (def state-can-borrow (fn (s) (state-unmake s (fn (cv pt ba st bs gl) ba))))
 
@@ -611,7 +609,7 @@
    (do
     (def s^ (state-borrow state sym))
     (if s^ ; todo load from frame
-     (print '[I] ' (symbol-name sym) ' borrow index: ' (state-borrow-index s^ sym) newline)
+     (print '[I] ' (symbol-name sym) ' borrow index: ' (indexof sym (state-borrow-list s^)) newline)
      (print '[W] ' (symbol-name sym) ' not found!' newline))
     (def glb (state-get-global s^ sym))
     (if glb
