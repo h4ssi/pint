@@ -986,14 +986,25 @@
 
    (c-call LLVMBuildRet * * main-b * (state-cur-value local-state^^)) ; todo care for empty body
 
-   ; todo copy borrowed vars onto frame
    (def state^ (state-merge state))
+
+   (print '[I] assembling closure frame: ' (state-borrow-list local-state^^) newline)
+   (def state^^
+    (snd
+    (leduce (fn (p borrowed)
+             (unpair p (fn (i s)
+              (def s^ (tr-load borrowed s))
+              ; todo codegen store load into frame
+              (pair (+ i 1) s^))))
+            (pair 0 state^)
+            (state-borrow-list local-state^^))))
+   (print '[I] done' newline)
 
    (c-call LLVMPositionBuilderAtEnd void * main-b * prev)
 
    (def func-pointer (c-call LLVMBuildPtrToInt * * main-b * f * i64-type * 'pack-func-ptr'))
 
-   (state-set-cur-value state^ (build-val function-type-index func-pointer))))))
+   (state-set-cur-value state^^ (build-val function-type-index func-pointer))))))
 
 (def tr-def-local
  (fn (name state)
