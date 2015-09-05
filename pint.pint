@@ -509,7 +509,7 @@
      (rec ba rec)))))))
 
  (state-unmake s (fn (cv pt ba st bs gl)
-  (if (in-list bs sym) ; already borrowed?
+  (if (in-list sym bs) ; already borrowed?
    s
    (if (or (sb^ ba sb^) (getk gl sym))
     (state-make cv pt ba st (reverse (cons sym (reverse bs))) gl)
