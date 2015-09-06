@@ -653,6 +653,7 @@
  int 2
  int 0)
 (def frame-ptr-type (c-call LLVMPointerType * * frame-type int 0))
+(def value-ptr-type (c-call LLVMPointerType * * value-type int 0))
 
 (def tr-c-type
  (fn (type)
@@ -958,9 +959,9 @@
 
 (def get-fn-type
  (fn (num-args)
-   (def arg-t-array (apply c-array (map (fn (arg) value-type) (range num-args))))
+   (def arg-t-array (apply c-array (cons value-ptr-type (map (fn (arg) value-type) (range num-args)))))
 
-   (c-call LLVMFunctionType * * value-type * arg-t-array int num-args int 0)))
+   (c-call LLVMFunctionType * * value-type * arg-t-array int (+ num-args 1) int 0)))
 
 (def index-make (fn (index) (c-call LLVMConstInt * * i32-type int index int 0)))
 
@@ -989,7 +990,7 @@
               (pair
                (+ i 1)
                (state-add-local st arg (c-call LLVMGetParam * * f int i))))))
-            (pair 0 local-state)
+            (pair 1 (state-add-local local-state '' (c-call LLVMGetParam * * f int 0)))
             args)))
 
    (def local-state^^ (tr body local-state^ tr))
@@ -1118,6 +1119,13 @@
                       int 2
                       * 'fn-addr'))
 
+  (def borrowed-vals-loc (c-call LLVMBuildInBoundsGEP *
+                          * main-b
+                          * frame-ptr
+                          * (c-array (index-make 0) (index-make 1) (index-make 0))
+                          int 3
+                          * 'borrowed-vals-addr'))
+
   (def target-fn (c-call LLVMBuildBitCast *
                   * main-b
                   * (c-call LLVMBuildLoad * * main-b * target-fn-loc * 'fn-ptr-void-ptr-type')
@@ -1128,8 +1136,8 @@
   (def res (c-call LLVMBuildCall *
             * main-b
             * target-fn
-            * (apply c-array (map state-cur-value arg-states))
-            int num-args
+            * (apply c-array (cons borrowed-vals-loc (map state-cur-value arg-states)))
+            int (+ num-args 1)
             * 'call-fn'))
 
   (state-set-cur-value state^ res)))))
