@@ -618,25 +618,46 @@
          * 'ptr to int'))
     int 2))))
 
+(def index-make (fn (index) (c-call LLVMConstInt * * i32-type int index int 0)))
+
+(def tr-load-from-borrow
+ (fn (sym state)
+  (def s^ (state-borrow state sym))
+  (if s^
+   (do
+    (def index (indexof sym (state-borrow-list s^)))
+    (print '[I] ' (symbol-name sym) ' borrow index: ' index newline)
+    (def val-loc (c-call LLVMBuildInBoundsGEP *
+                  * main-b
+                  * (state-get-local s^ '')
+                  * (c-array (index-make index))
+                  int 1
+                  * 'value-ptr'))
+    (def val (c-call LLVMBuildLoad *
+              * main-b
+              * val-loc
+              * 'value'))
+    (state-set-cur-value (state-add-local s^ sym val) val))
+   (print '[W] ' (symbol-name sym) ' not found!' newline))))
+
+(def tr-load-from-global
+ (fn (sym state)
+  (def glb (state-get-global state sym))
+    (if glb
+     (unpair glb (fn (label val)
+      (if (= 'var' label)
+      (state-set-cur-value state (c-call LLVMBuildLoad * * main-b * val * 'load_from_var'))
+       (print '[E] expected ' (symbol-name sym) ' to be a variable, actually is ' label newline))))
+    (print '[E] unknown variable ' (symbol-name sym) newline))))
+
 (def tr-load
  (fn (sym state)
   (def lcl (state-get-local state sym))
   (if lcl
    (state-set-cur-value state lcl)
-   (do
-    (def s^ (state-borrow state sym))
-    (if s^ ; todo load from frame
-     (print '[I] ' (symbol-name sym) ' borrow index: ' (indexof sym (state-borrow-list s^)) newline)
-     (print '[W] ' (symbol-name sym) ' not found!' newline))
-    (def glb (state-get-global s^ sym))
-    (if glb
-     (unpair glb (fn (label val)
-      (if (= 'var' label)
-       (state-set-cur-value s^ (c-call LLVMBuildLoad * * main-b * val * 'load_from_var'))
-       (print '[E] expected ' (symbol-name sym) ' to be a variable, actually is ' label newline))))
-     (do
-      (print '[E] unknown variable ' (symbol-name sym) newline)
-      (tr-nil state)))))))
+   (if (state-can-borrow state)
+    (tr-load-from-borrow sym state)
+    (tr-load-from-global sym state)))))
 
 ; LLVMTypeKind
 (def LLVMVoidTypeKind 0) ; type with no size
@@ -963,8 +984,6 @@
    (def arg-t-array (apply c-array (cons value-ptr-type (map (fn (arg) value-type) (range num-args)))))
 
    (c-call LLVMFunctionType * * value-type * arg-t-array int (+ num-args 1) int 0)))
-
-(def index-make (fn (index) (c-call LLVMConstInt * * i32-type int index int 0)))
 
 (def tr-fn
  (fn (form state tr)
