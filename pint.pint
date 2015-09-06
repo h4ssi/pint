@@ -652,6 +652,7 @@
  * (c-array pointer-type (c-call LLVMArrayType * * value-type int 0))
  int 2
  int 0)
+(def frame-ptr-type (c-call LLVMPointerType * * frame-type int 0))
 
 (def tr-c-type
  (fn (type)
@@ -961,6 +962,8 @@
 
    (c-call LLVMFunctionType * * value-type * arg-t-array int num-args int 0)))
 
+(def index-make (fn (index) (c-call LLVMConstInt * * i32-type int index int 0)))
+
 (def tr-fn
  (fn (form state tr)
   ; todo check length ok
@@ -1007,8 +1010,11 @@
                    int 1
                    * 'alloc-frame'))
    ; todo memory management & free!!!
-   (def frame (c-call LLVMBuildBitCast * * main-b * frame-mem * (c-call LLVMPointerType * * frame-type int 0) * 'cast-to-frame-ptr'))
-   (def index-make (fn (index) (c-call LLVMConstInt * * i32-type int index int 0)))
+   (def frame (c-call LLVMBuildBitCast * * main-b * frame-mem * frame-ptr-type * 'cast-to-frame-ptr'))
+   (c-call LLVMBuildStore *
+    * main-b
+    * (c-call LLVMBuildBitCast * * main-b * f * pointer-type * 'cast-f-to-f-tpr')
+    * (c-call LLVMBuildInBoundsGEP * * main-b * frame * (c-array (index-make 0) (index-make 0)) int 2 * 'func-ptr-loc'))
    (def state^^
     (snd
     (leduce (fn (p borrowed)
@@ -1027,7 +1033,7 @@
             borrows)))
    (print '[I] done' newline)
 
-   (def func-pointer (c-call LLVMBuildPtrToInt * * main-b * f * i64-type * 'pack-func-ptr'))
+   (def func-pointer (c-call LLVMBuildPtrToInt * * main-b * frame * i64-type * 'pack-closure'))
 
    (state-set-cur-value state^^ (build-val function-type-index func-pointer))))))
 
@@ -1099,11 +1105,24 @@
   (def f-type (get-fn-type num-args))
   (def f-ptr-type (c-call LLVMPointerType * * f-type int 0))
 
-  (def target-fn (c-call LLVMBuildIntToPtr *
+  (def frame-ptr (c-call LLVMBuildIntToPtr *
                   * main-b
-                  * (extract-value (state-cur-value f-state) 'fn-addr')
+                  * (extract-value (state-cur-value f-state) 'fn-frame-addr')
+                  * frame-ptr-type
+                  * 'fn-frame-addr-to-ptr'))
+
+  (def target-fn-loc (c-call LLVMBuildInBoundsGEP *
+                      * main-b
+                      * frame-ptr
+                      * (c-array (index-make 0) (index-make 0))
+                      int 2
+                      * 'fn-addr'))
+
+  (def target-fn (c-call LLVMBuildBitCast *
+                  * main-b
+                  * (c-call LLVMBuildLoad * * main-b * target-fn-loc * 'fn-ptr-void-ptr-type')
                   * f-ptr-type
-                  * 'fn-addr-to-ptr'))
+                  * 'fn-ptr'))
 
   ; todo call with frame
   (def res (c-call LLVMBuildCall *
