@@ -998,7 +998,7 @@
 
    (c-call LLVMBuildRet * * main-b * (state-cur-value local-state^^)) ; todo care for empty body
 
-   (def state^ (state-merge state))
+   (def state^ (state-merge local-state^^))
 
    (c-call LLVMPositionBuilderAtEnd void * main-b * prev)
 
