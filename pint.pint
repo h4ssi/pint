@@ -430,11 +430,28 @@
 
 (def c (c-call LLVMGetGlobalContext *))
 (def m (c-call LLVMModuleCreateWithNameInContext * * 'real' * c))
-(def int-type (c-call LLVMInt64TypeInContext * * c))
+
+(def void-type (c-call LLVMVoidTypeInContext * * c))
+(def i8-type (c-call LLVMInt8TypeInContext * * c))
+(def i32-type (c-call LLVMInt32TypeInContext * * c))
+(def i64-type (c-call LLVMInt64TypeInContext * * c))
+(def float-type (c-call LLVMFloatTypeInContext * * c))
 (def double-type (c-call LLVMDoubleTypeInContext * * c))
+(def pointer-type (c-call LLVMPointerType * * i8-type int 0))
 
 (def value-type (c-call LLVMStructCreateNamed * * c * 'value_type'))
-(c-call LLVMStructSetBody void * value-type * (c-array int-type int-type) int 2 int 0)
+(c-call LLVMStructSetBody void * value-type * (c-array i64-type i64-type) int 2 int 0)
+
+(def value-ptr-type (c-call LLVMPointerType * * value-type int 0))
+
+(def frame-type (c-call LLVMStructCreateNamed * * c * 'frame_type'))
+(c-call LLVMStructSetBody void
+ * frame-type
+ * (c-array pointer-type (c-call LLVMArrayType * * value-type int 0))
+ int 2
+ int 0)
+
+(def frame-ptr-type (c-call LLVMPointerType * * frame-type int 0))
 
 (def void-type (c-call LLVMVoidTypeInContext * * c))
 
@@ -533,11 +550,11 @@
                     (state-make pcv ppt pba pst pbs gl)
                     (state-make pcv ppt pba pst  bs gl)))))))) ; todo merge strat for accumulator?
 
-(def nil-type-index (c-call LLVMConstInt * * int-type int 0 int 1)) ; type 0 = nil
-(def number-type-index (c-call LLVMConstInt * * int-type int 1 int 1)) ; type 1 = number
-(def string-type-index (c-call LLVMConstInt * * int-type int 2 int 1)) ; type 2 = string
-(def function-type-index (c-call LLVMConstInt * * int-type int 3 int 1)) ; type 3 = function
-(def c-pointer-type-index (c-call LLVMConstInt * * int-type int 4 int 1)) ; type 4 = c-pointer
+(def nil-type-index (c-call LLVMConstInt * * i64-type int 0 int 1)) ; type 0 = nil
+(def number-type-index (c-call LLVMConstInt * * i64-type int 1 int 1)) ; type 1 = number
+(def string-type-index (c-call LLVMConstInt * * i64-type int 2 int 1)) ; type 2 = string
+(def function-type-index (c-call LLVMConstInt * * i64-type int 3 int 1)) ; type 3 = function
+(def c-pointer-type-index (c-call LLVMConstInt * * i64-type int 4 int 1)) ; type 4 = c-pointer
 
 (def type-index-friendly-name (fn (idx) (if (= nil-type-index idx) 'nil'
                                         (if (= number-type-index idx) 'number'
@@ -556,7 +573,7 @@
     * value-type
     * (c-array
         nil-type-index
-        (c-call LLVMConstNull * * int-type))
+        (c-call LLVMConstNull * * i64-type))
     int 2))))
 
 (def tr-number (fn (number state)
@@ -565,7 +582,7 @@
      * value-type
      * (c-array
          number-type-index
-         (c-call LLVMBuildBitCast * * main-b * (c-call LLVMConstReal * * double-type double number) * int-type * 'pack-dbl'))
+         (c-call LLVMBuildBitCast * * main-b * (c-call LLVMConstReal * * double-type double number) * i64-type * 'pack-dbl'))
      int 2))))
 
 (def tr-default (fn (state) (tr-number 1337 state))) ; todo raise error
@@ -594,10 +611,10 @@
          * (c-call LLVMBuildInBoundsGEP *
             * main-b
             * strmem
-            * (c-array (c-call LLVMConstInt * * int-type int 0 int 1))
+            * (c-array (c-call LLVMConstInt * * i64-type int 0 int 1))
             int 1
             * 'str to ptr')
-         * int-type
+         * i64-type
          * 'ptr to int'))
     int 2))))
 
@@ -638,22 +655,6 @@
 (def LLVMVectorTypeKind 13) ; SIMD 'packed' format, or other vector type
 (def LLVMMetadataTypeKind 14) ; Metadata
 (def LLVMX86_MMXTypeKind 15) ; X86 MMX
-
-(def void-type (c-call LLVMVoidTypeInContext * * c))
-(def i8-type (c-call LLVMInt8TypeInContext * * c))
-(def i32-type (c-call LLVMInt32TypeInContext * * c))
-(def i64-type (c-call LLVMInt64TypeInContext * * c))
-(def float-type (c-call LLVMFloatTypeInContext * * c))
-(def pointer-type (c-call LLVMPointerType * * i8-type int 0))
-
-(def frame-type (c-call LLVMStructCreateNamed * * c * 'frame_type'))
-(c-call LLVMStructSetBody void
- * frame-type
- * (c-array pointer-type (c-call LLVMArrayType * * value-type int 0))
- int 2
- int 0)
-(def frame-ptr-type (c-call LLVMPointerType * * frame-type int 0))
-(def value-ptr-type (c-call LLVMPointerType * * value-type int 0))
 
 (def tr-c-type
  (fn (type)
