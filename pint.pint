@@ -1166,6 +1166,9 @@
 
 (def tr-form
  (fn (form state tr)
+   (if (empty? form)
+     (tr-default state) ; todo empty list
+
    (if (= (symbol 'def') (head form))
      (tr-def form state tr)
 
@@ -1178,7 +1181,7 @@
    (if (= (symbol 'fn') (head form))
      (tr-fn form state tr)
 
-   (tr-call form state tr)))))))
+   (tr-call form state tr))))))))
 
 (def tr
   (fn (c)
