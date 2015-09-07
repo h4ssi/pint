@@ -1,3 +1,6 @@
 (def msg 'hello world!')
 
-(c-call puts int * msg)
+(def hw (fn ()
+    (c-call puts int * msg)))
+
+(hw)
