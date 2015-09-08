@@ -552,11 +552,14 @@
                     (state-make pcv ppt pba pst pbs gl)
                     (state-make pcv ppt pba pst  bs gl)))))))) ; todo merge strat for accumulator?
 
-(def nil-type-index (c-call LLVMConstInt * * i64-type int 0 int 1)) ; type 0 = nil
-(def number-type-index (c-call LLVMConstInt * * i64-type int 1 int 1)) ; type 1 = number
-(def string-type-index (c-call LLVMConstInt * * i64-type int 2 int 1)) ; type 2 = string
-(def function-type-index (c-call LLVMConstInt * * i64-type int 3 int 1)) ; type 3 = function
-(def c-pointer-type-index (c-call LLVMConstInt * * i64-type int 4 int 1)) ; type 4 = c-pointer
+(def i32-const (fn (i) (c-call LLVMConstInt * * i32-type int i int 1)))
+(def i64-const (fn (i) (c-call LLVMConstInt * * i64-type int i int 1)))
+
+(def nil-type-index (i64-const 0)) ; type 0 = nil
+(def number-type-index (i64-const 1)) ; type 1 = number
+(def string-type-index (i64-const 2)) ; type 2 = string
+(def function-type-index (i64-const 3)) ; type 3 = function
+(def c-pointer-type-index (i64-const 4)) ; type 4 = c-pointer
 
 (def type-index-friendly-name (fn (idx) (if (= nil-type-index idx) 'nil'
                                         (if (= number-type-index idx) 'number'
@@ -613,14 +616,12 @@
          * (c-call LLVMBuildInBoundsGEP *
             * main-b
             * strmem
-            * (c-array (c-call LLVMConstInt * * i64-type int 0 int 1))
+            * (c-array (i64-const 0))
             int 1
             * 'str to ptr')
          * i64-type
          * 'ptr to int'))
     int 2))))
-
-(def index-make (fn (index) (c-call LLVMConstInt * * i32-type int index int 0)))
 
 (def tr-load-from-borrow
  (fn (sym state)
@@ -632,7 +633,7 @@
     (def val-loc (c-call LLVMBuildInBoundsGEP *
                   * main-b
                   * (state-get-local s^ '')
-                  * (c-array (index-make index))
+                  * (c-array (i64-const index))
                   int 1
                   * 'value-ptr'))
     (def val (c-call LLVMBuildLoad *
@@ -1029,7 +1030,7 @@
    (def frame-mem (c-call LLVMBuildCall *
                    * main-b
                    * (snd (state-get-global state^ (quote malloc)))
-                   * (c-array (c-call LLVMConstInt * * i32-type int frame-size int 0))
+                   * (c-array (i32-const frame-size))
                    int 1
                    * 'alloc-frame'))
    ; todo memory management & free!!!
@@ -1037,7 +1038,7 @@
    (c-call LLVMBuildStore *
     * main-b
     * (c-call LLVMBuildBitCast * * main-b * f * pointer-type * 'cast-f-to-f-tpr')
-    * (c-call LLVMBuildInBoundsGEP * * main-b * frame * (c-array (index-make 0) (index-make 0)) int 2 * 'func-ptr-loc'))
+    * (c-call LLVMBuildInBoundsGEP * * main-b * frame * (c-array (i64-const 0) (i32-const 0)) int 2 * 'func-ptr-loc'))
    (def state^^
     (snd
     (leduce (fn (p borrowed)
@@ -1047,7 +1048,7 @@
               (def loc (c-call LLVMBuildInBoundsGEP *
                         * main-b
                         * frame
-                        * (c-array (index-make 0) (index-make 1) (index-make i))
+                        * (c-array (i64-const 0) (i32-const 1) (i64-const i))
                         int 3
                         * (str 'capture-' (symbol-name borrowed) '-addr')))
               (c-call LLVMBuildStore * * main-b * (state-cur-value s^) * loc)
@@ -1137,14 +1138,14 @@
   (def target-fn-loc (c-call LLVMBuildInBoundsGEP *
                       * main-b
                       * frame-ptr
-                      * (c-array (index-make 0) (index-make 0))
+                      * (c-array (i64-const 0) (i32-const 0))
                       int 2
                       * 'fn-addr'))
 
   (def borrowed-vals-loc (c-call LLVMBuildInBoundsGEP *
                           * main-b
                           * frame-ptr
-                          * (c-array (index-make 0) (index-make 1) (index-make 0))
+                          * (c-array (i64-const 0) (i32-const 1) (i64-const 0))
                           int 3
                           * 'borrowed-vals-addr'))
 
