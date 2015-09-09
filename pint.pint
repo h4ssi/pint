@@ -558,15 +558,17 @@
 (def nil-type-index (i64-const 0)) ; type 0 = nil
 (def number-type-index (i64-const 1)) ; type 1 = number
 (def string-type-index (i64-const 2)) ; type 2 = string
-(def function-type-index (i64-const 3)) ; type 3 = function
-(def c-pointer-type-index (i64-const 4)) ; type 4 = c-pointer
+(def list-type-index (i64-const 3)) ; type 3 = list
+(def function-type-index (i64-const 4)) ; type 4 = function
+(def c-pointer-type-index (i64-const 5)) ; type 5 = c-pointer
 
 (def type-index-friendly-name (fn (idx) (if (= nil-type-index idx) 'nil'
                                         (if (= number-type-index idx) 'number'
                                         (if (= string-type-index idx) 'string'
+                                        (if (= list-type-index idx) 'list'
                                         (if (= function-type-index idx) 'function'
                                         (if (= c-pointer-type-index idx) 'c-pointer'
-                                        'value')))))))
+                                        'value'))))))))
 
 (def extract-with-index (fn (val index label) (c-call LLVMBuildExtractValue * * main-b * val int index * label)))
 (def extract-type-index (fn (val label) (extract-with-index val 0 label)))
@@ -621,6 +623,16 @@
             * 'str to ptr')
          * i64-type
          * 'ptr to int'))
+    int 2))))
+
+(def tr-empty-list
+ (fn (state)
+  (state-set-cur-value state
+   (c-call LLVMConstNamedStruct *
+    * value-type
+    * (c-array
+       list-type-index
+       (c-call LLVMConstNull * * i64-type))
     int 2))))
 
 (def tr-load-from-borrow
@@ -750,6 +762,8 @@
 
 (def tr-cast-from-function-to-c-type tr-cast-if-target-c-type-is-pointer)
 
+(def tr-cast-from-list-to-c-type tr-cast-if-target-c-type-is-pointer)
+
 (def tr-cast-to-c-type ; todo write tests for all combinations!
  (fn (state type val)
   (def f (c-call LLVMGetBasicBlockParent * * (c-call LLVMGetInsertBlock * * main-b)))
@@ -758,7 +772,7 @@
   (def merge-block (c-call LLVMAppendBasicBlockInContext * * c * f * 'merge'))
 
   (def c-pointer-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'c-pointer-cast'))
-  (def switch (c-call LLVMBuildSwitch * * main-b * dyn-type * c-pointer-cast-bb int 4))
+  (def switch (c-call LLVMBuildSwitch * * main-b * dyn-type * c-pointer-cast-bb int 5))
 
   ; cast from nil
   (def nil-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'nil-cast'))
@@ -781,6 +795,13 @@
   (def string-cast-v (tr-cast-from-string-to-c-type type val))
   (c-call LLVMBuildBr * * main-b * merge-block)
 
+  ; cast from list
+  (def list-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'list-cast'))
+  (c-call LLVMAddCase void * switch * list-type-index * list-cast-bb)
+  (c-call LLVMPositionBuilderAtEnd void * main-b * list-cast-bb)
+  (def list-cast-v (tr-cast-from-list-to-c-type type val))
+  (c-call LLVMBuildBr * * main-b * merge-block)
+  
   ; cast from function
   (def function-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'function-cast'))
   (c-call LLVMAddCase void * switch * function-type-index * function-cast-bb)
@@ -803,15 +824,17 @@
       nil-cast-v
       number-cast-v
       string-cast-v
+      list-cast-v
       function-cast-v
       c-pointer-cast-v)
    * (c-array
       nil-cast-bb
       number-cast-bb
       string-cast-bb
+      list-cast-bb
       function-cast-bb
       c-pointer-cast-bb)
-   int 5)
+   int 6)
 
   (state-set-cur-value state phi)))
 
@@ -1168,7 +1191,7 @@
 (def tr-form
  (fn (form state tr)
    (if (empty? form)
-     (tr-default state) ; todo empty list
+     (tr-empty-list state)
 
    (if (= (symbol 'def') (head form))
      (tr-def form state tr)
