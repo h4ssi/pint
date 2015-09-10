@@ -456,6 +456,11 @@
 
 (def value-ptr-type (c-call LLVMPointerType * * value-type int 0))
 
+(def list-elem-type (c-call LLVMStructCreateNamed * * c * 'list_elem_type'))
+(c-call LLVMStructSetBody void * list-elem-type * (c-array value-type pointer-type) int 2 int 0)
+
+(def list-elem-ptr-type (c-call LLVMPointerType * * list-elem-type int 0))
+
 (def frame-type (c-call LLVMStructCreateNamed * * c * 'frame_type'))
 (c-call LLVMStructSetBody void
  * frame-type
