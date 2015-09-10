@@ -588,6 +588,15 @@
 (def extract-with-index (fn (val index label) (c-call LLVMBuildExtractValue * * main-b * val int index * label)))
 (def extract-type-index (fn (val label) (extract-with-index val 0 label)))
 (def extract-value      (fn (val label) (extract-with-index val 1 label)))
+(def gep-with-index (fn (ptr index label)
+                     (c-call LLVMBuildInBoundsGEP *
+                      * main-b
+                      * ptr
+                      * (c-array (i64-const 0) (i32-const index))
+                     int 2
+                     * label)))
+(def gep-list-elem-val (fn (list-elem label) (gep-with-index list-elem 0 label)))
+(def gep-list-elem-next (fn (list-elem label) (gep-with-index list-elem 1 label)))
 
 (def tr-nil (fn (state)
  (state-set-cur-value state
@@ -1236,8 +1245,58 @@
    (tr-call form state tr))))))))
 
 (def tr
-  (fn (c)
+  (fn (code)
+    (def s-malloc (state-add-global-fn (init-state) (quote malloc) (quote *) (cons (quote uint))))
 
+    (def cons-fn (fst
+     (gen-fn 2 (fn (frame args) (unpair args (fn (e l)
+      (def f (c-call LLVMGetBasicBlockParent * * (c-call LLVMGetInsertBlock * * main-b)))
+
+      (def nil-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'is-nil'))
+      (def list-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'is-list'))
+
+      (def is-list (c-call LLVMBuildICmp * * main-b int LLVMIntEQ * (extract-type-index l 'l-type') * list-type-index * 'is-list'))
+
+      (c-call LLVMBuildCondBr * * main-b * is-list * list-bb * nil-bb)
+
+      (c-call LLVMPositionBuilderAtEnd void * main-b * nil-bb)
+
+      (c-call LLVMBuildRet * * main-b * (state-cur-value (tr-nil s-malloc)))
+
+      (c-call LLVMPositionBuilderAtEnd void * main-b * list-bb)
+
+      (def alloc (c-call LLVMBuildCall *
+                  * main-b
+                  * (snd (state-get-global s-malloc (quote malloc)))
+                  * (c-array (i32-const 24))
+                  int 1
+                  * 'list-elem-mem-void-ptr'))
+
+      (def list-elem-mem (c-call LLVMBuildBitCast *
+                          * main-b
+                          * alloc
+                          * list-elem-ptr-type
+                          * 'list-elem-mem'))
+
+      (c-call LLVMBuildStore *
+       * main-b
+       * e
+       * (gep-list-elem-val list-elem-mem 'list-elem-val-ptr'))
+      (c-call LLVMBuildStore *
+       * main-b
+       * (c-call LLVMBuildIntToPtr * * main-b * (extract-value l 'l-val') * pointer-type * 'cast-to-ptr')
+       * (gep-list-elem-next list-elem-mem 'list-elem-next-ptr'))
+
+      (def new-l (build-val list-type-index (c-call LLVMBuildPtrToInt * * main-b * list-elem-mem * i64-type * 'cast-to-int')))
+
+      (c-call LLVMBuildRet * * main-b * new-l)
+
+      nil))))))
+
+    (def s-cons (state-add-local s-malloc (quote cons)
+     (state-cur-value (gen-fn-frame s-malloc cons-fn ()))))
+
+    (def s s-cons)
     (def tr^ (fn (c state rec)
       (if (empty? c)
        state
@@ -1255,7 +1314,7 @@
          (rec t state rec)
        ) (head c) (tail c)))))
 
-    (tr^ c (state-add-global-fn (init-state) (quote malloc) (quote *) (cons (quote uint))) tr^)))
+    (tr^ code s tr^)))
 
 (tr code)
 
