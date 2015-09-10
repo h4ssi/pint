@@ -1296,7 +1296,46 @@
     (def s-cons (state-add-local s-malloc (quote cons)
      (state-cur-value (gen-fn-frame s-malloc cons-fn ()))))
 
-    (def s s-cons)
+    (def head-fn (fst
+     (gen-fn 1 (fn (frame args) (uncons args (fn (l _)
+      (def f (c-call LLVMGetBasicBlockParent * * (c-call LLVMGetInsertBlock * * main-b)))
+
+      (def nil-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'is-nil'))
+      (def list-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'is-list'))
+      (def not-empty-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'not-empty'))
+
+      (def is-list (c-call LLVMBuildICmp * * main-b int LLVMIntEQ * (extract-type-index l 'l-type') * list-type-index * 'is-list'))
+
+      (c-call LLVMBuildCondBr * * main-b * is-list * list-bb * nil-bb)
+
+      (c-call LLVMPositionBuilderAtEnd void * main-b * nil-bb)
+
+      (c-call LLVMBuildRet * * main-b * (state-cur-value (tr-nil s-malloc)))
+
+      (c-call LLVMPositionBuilderAtEnd void * main-b * list-bb)
+
+      (def head-ptr (c-call LLVMBuildIntToPtr * * main-b * (extract-value l 'l-val') * list-elem-ptr-type * 'head-ptr'))
+
+      (def is-empty (c-call LLVMBuildIsNull * * main-b * head-ptr * 'is-empty'))
+
+      (c-call LLVMBuildCondBr * * main-b * is-empty * nil-bb * not-empty-bb)
+
+      (c-call LLVMPositionBuilderAtEnd void * main-b * not-empty-bb)
+
+      (def head-val (c-call LLVMBuildLoad *
+                     * main-b
+                     * (gep-list-elem-val head-ptr 'head-val-ptr')
+                     * 'head-val'))
+
+      (c-call LLVMBuildRet * * main-b * head-val)
+
+      nil))))))
+
+    (def s-head (state-add-local s-cons (quote head)
+     (state-cur-value (gen-fn-frame s-cons head-fn ()))))
+
+    (def s s-head)
+
     (def tr^ (fn (c state rec)
       (if (empty? c)
        state
