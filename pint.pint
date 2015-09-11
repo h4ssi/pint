@@ -1383,18 +1383,22 @@
     (def s-tail (state-add-local s-head (quote tail)
      (state-cur-value (gen-fn-frame s-head tail-fn ()))))
 
+    (def zero (c-call LLVMConstNull * * double-type))
+    (def one (c-call LLVMConstRealOfString * * double-type * '1'))
+    (def num-or-default (fn (v d)
+                         (c-call LLVMBuildSelect *
+                          * main-b
+                          * (tr-type-test number-type-index v)
+                          * (c-call LLVMBuildBitCast * * main-b * (extract-value v 'int-dbl') * double-type * 'dbl')
+                          * d
+                          * 'num-or-default')))
+    (def num-or-zero (fn (v) (num-or-default v zero)))
+    (def num-or-one (fn (v) (num-or-default v one)))
+
     (def +-fn (fst
      (gen-fn 2 (fn (frame args) (unpair args (fn (l r)
-      (def zero (c-call LLVMConstNull * * double-type))
       (def s zero)
 
-      (def num-or-zero (fn (v)
-                        (c-call LLVMBuildSelect *
-                         * main-b
-                         * (tr-type-test number-type-index v)
-                         * (c-call LLVMBuildBitCast * * main-b * (extract-value v 'int-dbl') * double-type * 'dbl')
-                         * zero
-                         * 'num-or-zero')))
       (def s^  (c-call LLVMBuildFAdd * * main-b * s  * (num-or-zero l) * 's1'))
       (def s^^ (c-call LLVMBuildFAdd * * main-b * s^ * (num-or-zero r) * 's2'))
 
@@ -1407,7 +1411,23 @@
     (def s-+ (state-add-local s-tail (quote +)
      (state-cur-value (gen-fn-frame s-tail +-fn ()))))
 
-    (def s s-+)
+    (def *-fn (fst
+     (gen-fn 2 (fn (frame args) (unpair args (fn (l r)
+      (def p one)
+
+      (def p^  (c-call LLVMBuildFMul * * main-b * p  * (num-or-one l) * 'p1'))
+      (def p^^ (c-call LLVMBuildFMul * * main-b * p^ * (num-or-one r) * 'p2'))
+
+      (c-call LLVMBuildRet *
+       * main-b
+       * (build-val number-type-index (c-call LLVMBuildBitCast * * main-b * p^^ * i64-type * 'pack-dbl')))
+
+      nil))))))
+
+    (def s-* (state-add-local s-+ (quote *)
+     (state-cur-value (gen-fn-frame s-+ *-fn ()))))
+
+    (def s s-*)
 
     (def tr^ (fn (c state rec)
       (if (empty? c)
