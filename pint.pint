@@ -1442,7 +1442,22 @@
     (def s-- (state-add-local s-* (quote -)
      (state-cur-value (gen-fn-frame s-* --fn ()))))
 
-    (def s s--)
+    (def /-fn (fst
+     (gen-fn 1 (fn (frame args) (uncons args (fn (n _)
+      (def q one)
+
+      (def q^ (c-call LLVMBuildFDiv * * main-b * q * (num-or-one n) * 'quot'))
+
+      (c-call LLVMBuildRet *
+       * main-b
+       * (build-val number-type-index (c-call LLVMBuildBitCast * * main-b * q^ * i64-type * 'pack-dbl')))
+
+      nil))))))
+
+    (def s-/ (state-add-local s-- (quote /)
+     (state-cur-value (gen-fn-frame s-- /-fn ()))))
+
+    (def s s-/)
 
     (def tr^ (fn (c state rec)
       (if (empty? c)
