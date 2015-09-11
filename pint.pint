@@ -1244,6 +1244,15 @@
 
    (tr-call form state tr))))))))
 
+(def tr-type-test
+ (fn (type-index val)
+  (c-call LLVMBuildICmp *
+   * main-b
+   int LLVMIntEQ
+   * (extract-type-index val 'type-index')
+   * type-index
+   * (str 'is-' (type-index-friendly-name type-index)))))
+
 (def tr
   (fn (code)
     (def s-malloc (state-add-global-fn (init-state) (quote malloc) (quote *) (cons (quote uint) ())))
@@ -1255,7 +1264,7 @@
       (def nil-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'is-nil'))
       (def list-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'is-list'))
 
-      (def is-list (c-call LLVMBuildICmp * * main-b int LLVMIntEQ * (extract-type-index l 'l-type') * list-type-index * 'is-list'))
+      (def is-list (tr-type-test list-type-index l))
 
       (c-call LLVMBuildCondBr * * main-b * is-list * list-bb * nil-bb)
 
@@ -1304,7 +1313,7 @@
       (def list-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'is-list'))
       (def not-empty-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'not-empty'))
 
-      (def is-list (c-call LLVMBuildICmp * * main-b int LLVMIntEQ * (extract-type-index l 'l-type') * list-type-index * 'is-list'))
+      (def is-list (tr-type-test list-type-index l))
 
       (c-call LLVMBuildCondBr * * main-b * is-list * list-bb * nil-bb)
 
@@ -1342,7 +1351,7 @@
       (def list-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'is-list'))
       (def not-empty-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'not-empty'))
 
-      (def is-list (c-call LLVMBuildICmp * * main-b int LLVMIntEQ * (extract-type-index l 'l-type') * list-type-index * 'is-list'))
+      (def is-list (tr-type-test list-type-index l))
 
       (c-call LLVMBuildCondBr * * main-b * is-list * list-bb * nil-bb)
 
@@ -1374,7 +1383,31 @@
     (def s-tail (state-add-local s-head (quote tail)
      (state-cur-value (gen-fn-frame s-head tail-fn ()))))
 
-    (def s s-tail)
+    (def +-fn (fst
+     (gen-fn 2 (fn (frame args) (unpair args (fn (l r)
+      (def zero (c-call LLVMConstNull * * double-type))
+      (def s zero)
+
+      (def num-or-zero (fn (v)
+                        (c-call LLVMBuildSelect *
+                         * main-b
+                         * (tr-type-test number-type-index v)
+                         * (c-call LLVMBuildBitCast * * main-b * (extract-value v 'int-dbl') * double-type * 'dbl')
+                         * zero
+                         * 'num-or-zero')))
+      (def s^  (c-call LLVMBuildFAdd * * main-b * s  * (num-or-zero l) * 's1'))
+      (def s^^ (c-call LLVMBuildFAdd * * main-b * s^ * (num-or-zero r) * 's2'))
+
+      (c-call LLVMBuildRet *
+       * main-b
+       * (build-val number-type-index (c-call LLVMBuildBitCast * * main-b * s^^ * i64-type * 'pack-dbl')))
+
+      nil))))))
+
+    (def s-+ (state-add-local s-tail (quote +)
+     (state-cur-value (gen-fn-frame s-tail +-fn ()))))
+
+    (def s s-+)
 
     (def tr^ (fn (c state rec)
       (if (empty? c)
