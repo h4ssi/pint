@@ -94,7 +94,7 @@
 
 (def pair
   (fn (l r)
-    (cons l (cons r))))
+    (cons l (cons r ()))))
 
 (def unpair
  (fn (p f)
@@ -296,7 +296,7 @@
       (if (nil? t)
        (pair () h)
        (if (empty? t)
-        (pair (cons h) nil)
+        (pair (cons h ()) nil)
         (unpair (rec t rec)
          (fn (hh tt)
           (pair (cons h hh) tt)))))))))
@@ -344,7 +344,7 @@
 
     (pair (+ (n dec) (* (n com) (/ (m com)))) rrr)))
     
-(def err (fn (x m) (print m newline) (pair (cons nil) x)))
+(def err (fn (x m) (print m newline) (pair (cons nil ()) x)))
 
 (def parse-list 
   (fn (cs prs)
@@ -424,7 +424,7 @@
       ()
       ((fn (t r)
         (if (nil? t)
-          (cons t)
+          (cons t ())
           (cons t (rec r rec)))
       )(head p)(head (tail p)))
     )
@@ -507,7 +507,7 @@
                  (cons borrow-ancestor
                  (cons symbol-table
                  (cons borrowed-syms
-                 (cons globals))))))))
+                 (cons globals ()))))))))
 
 (def init-state (fn () (state-make nil nil nil () nil ())))
 
@@ -944,7 +944,7 @@
   (def casts (stap (fn (st typed-arg)
                     (unpair typed-arg
                      (fn (type arg)
-                      (def st^ (tr (cons arg) st tr))
+                      (def st^ (tr (cons arg ()) st tr))
                       (pair st^ (tr-cast-to-c-type st^ type (state-cur-value st^))))))
                    state^
                    (reverse (head typed-args))))
@@ -988,7 +988,7 @@
    (uncons r (fn (then r)
    (uncons r (fn (else r)
 
-   (def s^ (tr (cons cond) state tr))
+   (def s^ (tr (cons cond ()) state tr))
 
    (def cond-v (state-cur-value s^))
 
@@ -1003,13 +1003,13 @@
    (c-call LLVMBuildCondBr * * main-b * cond-true? * then-bb * else-bb)
 
    (c-call LLVMPositionBuilderAtEnd void * main-b * then-bb)
-   (def s^then (tr (cons then) (state-branch-direct s^) tr))
+   (def s^then (tr (cons then ()) (state-branch-direct s^) tr))
    (def s^^ (state-merge s^then))
    (c-call LLVMBuildBr * * main-b * merge-bb)
 
 
    (c-call LLVMPositionBuilderAtEnd void * main-b * else-bb)
-   (def s^else (tr (cons else) (state-branch-direct s^^) tr))
+   (def s^else (tr (cons else ()) (state-branch-direct s^^) tr))
    (def s^^^ (state-merge s^else))
    (c-call LLVMBuildBr * * main-b * merge-bb)
 
@@ -1161,7 +1161,7 @@
 
    (if (nil? val)
     (tr-nil state)
-    (tr (cons val) state tr))))
+    (tr (cons val ()) state tr))))
 
   (if (state-can-borrow state) ; is local var enough?
    (tr-def-local name (build))
@@ -1173,10 +1173,10 @@
 
   (uncons form (fn (f args)
 
-  (def f-state (tr (cons f) state tr))
+  (def f-state (tr (cons f ()) state tr))
 
   (def args-state (stap (fn (st arg)
-                        (def st^ (tr (cons arg) st tr))
+                        (def st^ (tr (cons arg ()) st tr))
                         (pair st^ st^)) ; todo do list in cur-val instead?
                    f-state
                    (reverse args)))
@@ -1246,7 +1246,7 @@
 
 (def tr
   (fn (code)
-    (def s-malloc (state-add-global-fn (init-state) (quote malloc) (quote *) (cons (quote uint))))
+    (def s-malloc (state-add-global-fn (init-state) (quote malloc) (quote *) (cons (quote uint) ())))
 
     (def cons-fn (fst
      (gen-fn 2 (fn (frame args) (unpair args (fn (e l)

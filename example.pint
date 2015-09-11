@@ -8,7 +8,7 @@
 
 ; do some tests, check exit code
 
-(def nil (cons))
+(def nil (head ()))
 (def failed-tests 0)
 (def num-tests 0)
 
@@ -18,15 +18,15 @@
 ')
 (def test (macro (cond descr)
            (cons (quote do)
-           (cons (cons (quote def) (cons (quote num-tests) (cons (cons (quote +) (cons (quote num-tests) (cons 1))))))
+           (cons (cons (quote def) (cons (quote num-tests) (cons (cons (quote +) (cons (quote num-tests) (cons 1 ()))) ())))
            (cons
              (cons (quote if)
              (cons cond
              (cons nil
              (cons (cons (quote do)
-                   (cons (cons (quote print) (cons '[F] ' (cons descr (cons newline))))
-                   (cons (cons (quote def) (cons (quote failed-tests) (cons (cons (quote +) (cons (quote failed-tests) (cons 1))))))
-             ))))))))))))
+                   (cons (cons (quote print) (cons '[F] ' (cons descr (cons newline ()))))
+                   (cons (cons (quote def) (cons (quote failed-tests) (cons (cons (quote +) (cons (quote failed-tests) (cons 1 ()))) ()))) ()
+             ))) ())))) ())))))
 
 (test (not nil) 'negation')
 (test (not (not 1)) 'double negation')
@@ -40,8 +40,8 @@
 (test (not (= (quote hello) (quote goodbye))) 'symbols are not equal')
 (test (not (= hello hello)) 'fns are never equal')
 (test (= () ()) 'empty lists are equal')
-(test (= (cons 1) (cons 1)) 'lists are equal')
-(test (not (= () (cons 1))) 'lists are not equal')
+(test (= (cons 1 ()) (cons 1 ())) 'lists are equal')
+(test (not (= () (cons 1 ()))) 'lists are not equal')
 (test (not (= 1 "1")) 'different types are not equal')
 
 (def double (fn (x) (+ x x)))
@@ -60,7 +60,7 @@
 (test (= (quote a) (symbol 'a')) 'symbol quoting works')
 (test (= (quote 1337) 1337) 'number quoting works')
 (test (= (quote 'text') 'text') 'text quoting works')
-(test (= (quote (a 1 c)) (cons (symbol 'a') (cons 1 (cons (symbol 'c'))))) 'list quoting works')
+(test (= (quote (a 1 c)) (cons (symbol 'a') (cons 1 (cons (symbol 'c') ())))) 'list quoting works')
 
 (print 'over \'n out')
 (print '\\./\'\\./\'\\./\'\\')
@@ -69,20 +69,20 @@
 
 (def nil? (fn (t) (if t nil 1)))
 
-(test (nil? (cons)) 'cons only results in nil')
+(test (nil? (head ())) 'head of empty results in nil')
 (test () 'empty list is not nil')
 (test (nil? (tail ())) 'tail of empty list is nil')
-(test (head (cons 'asdf')) 'cons with one arg is single elem list')
-(test (tail (cons 'asdf')) 'tail on single elem list is empty list')
+(test (head (cons 'asdf' ())) 'cons with one arg is single elem list')
+(test (tail (cons 'asdf' ())) 'tail on single elem list is empty list')
 (test (nil? (tail ())) 'tail on empty list is nil')
-(test (= 1 (head (tail (tail (cons 2 (cons 2 (cons 1))))))) 'push and pop from list')
+(test (= 1 (head (tail (tail (cons 2 (cons 2 (cons 1 ()))))))) 'push and pop from list')
 (test (tail (tail (tail (quote (a a a))))) 'calling tails first leads to empty list')
 (test (nil? (tail (tail (tail (tail (quote a a a)))))) 'calling tails then leads to nil')
 
 (def twice (macro (cmd) 
     (cons (quote do) 
     (cons cmd 
-    (cons cmd)))))
+    (cons cmd ())))))
 
 (def dbl 'Na')
 
@@ -112,7 +112,7 @@
 (test (is-number 7) '7 is a number')
 (test (not (is-number '7')) '\'7\' is not a number')
 (test (not (is-number (symbol '7'))) 'symbol \'7\' is not a number')
-(test (not (is-number (cons 7))) '(7) is not a number')
+(test (not (is-number (cons 7 ()))) '(7) is not a number')
 (test (not (is-number ())) '() is not a number')
 (test (not (is-number c-test-val)) 'c value is not a number')
 (test (not (is-number print)) '(print ...) is not a number')
@@ -123,7 +123,7 @@
 (test (not (is-string 7)) '7 is not a string')
 (test (is-string '7') '\'7\' is a string')
 (test (not (is-string (symbol '7'))) 'symbol \'7\' is not a string')
-(test (not (is-string (cons 7))) '(7) is not a string')
+(test (not (is-string (cons 7 ()))) '(7) is not a string')
 (test (not (is-string ())) '() is not a string')
 (test (not (is-string c-test-val)) 'c value is not a string')
 (test (not (is-string print)) '(print ...) is not a string')
@@ -134,7 +134,7 @@
 (test (not (is-symbol 7)) '7 is not a symbol')
 (test (not (is-symbol '7')) '\'7\' is not a symbol')
 (test (is-symbol (symbol '7')) 'symbol \'7\' is a symbol')
-(test (not (is-symbol (cons 7))) '(7) is not a symbol')
+(test (not (is-symbol (cons 7 ()))) '(7) is not a symbol')
 (test (not (is-symbol ())) '() is not a symbol')
 (test (not (is-symbol c-test-val)) 'c value is not a symbol')
 (test (not (is-symbol print)) '(print ...) is not a symbol')
@@ -145,7 +145,7 @@
 (test (not (is-list 7)) '7 is not a list')
 (test (not (is-list '7')) '\'7\' is not a list')
 (test (not (is-list (symbol '7'))) 'symbol \'7\' is not a list')
-(test (is-list (cons 7)) '(7) is a list')
+(test (is-list (cons 7 ())) '(7) is a list')
 (test (is-list ()) '() is a list')
 (test (not (is-list c-test-val)) 'c value is not a list')
 (test (not (is-list print)) '(print ...) is not a list')
@@ -156,12 +156,12 @@
 (test (not (is-fn 7)) '7 is not a fn')
 (test (not (is-fn '7')) '\'7\' is not a fn')
 (test (not (is-fn (symbol '7'))) 'symbol \'7\' is not a fn')
-(test (not (is-fn (cons 7))) '(7) is not a fn')
+(test (not (is-fn (cons 7 ()))) '(7) is not a fn')
 (test (not (is-fn ())) '() is not a fn')
 (test (not (is-fn c-test-val)) 'c value is not a fn')
 (test (is-fn print) '(print ...) is not a fn')
 
-(test (= (apply str (cons 1 (cons 2 (cons 3)))) '123') 'apply list as args to str')
+(test (= (apply str (cons 1 (cons 2 (cons 3 ())))) '123') 'apply list as args to str')
 
 (print (str 'tests: ' num-tests))
 
