@@ -103,7 +103,7 @@
 (test (= (c-str (c-val program_invocation_short_name *)) 'hello') 'read global c-var')
 
 
-(def is-number (fn (o) (= o (+ o))))
+(def is-number (fn (o) (= o (+ 0 o))))
 
 (def c-test-val (c-val program_invocation_short_name *))
 (test (not (= c-test-val 'any value')) 'bug where c-ptr broke =')

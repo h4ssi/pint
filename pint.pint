@@ -434,7 +434,7 @@
 
 (print code newline)
 
-(def is-number (fn (o) (= o (+ o))))
+(def is-number (fn (o) (= o (+ 0 o))))
 (def is-string (fn (o) (= o (str o))))
 (def is-symbol (fn (o) (= o (symbol (symbol-name o)))))
 (def is-list (fn (o) (if (= o ()) o (tail o))))
