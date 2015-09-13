@@ -163,7 +163,7 @@
 
 (test (= (apply str (cons 1 (cons 2 (cons 3 ())))) '123') 'apply list as args to str')
 
-(print (str 'tests: ' num-tests))
+(print (str 'tests: ' num-tests ' failed: ' failed-tests))
 
 failed-tests
 
