@@ -588,6 +588,17 @@
 (def extract-with-index (fn (val index label) (c-call LLVMBuildExtractValue * * main-b * val int index * label)))
 (def extract-type-index (fn (val label) (extract-with-index val 0 label)))
 (def extract-value      (fn (val label) (extract-with-index val 1 label)))
+(def extract-double     (fn (val label) (c-call LLVMBuildBitCast *
+                                         * main-b
+                                         * (extract-value val (str label '-int'))
+                                         * double-type
+                                         * (str label '-double'))))
+(def extract-pointer    (fn (val type label) (c-call LLVMBuildIntToPtr *
+                                              * main-b
+                                              * (extract-value val (str label '-int'))
+                                              * type
+                                              * (str label '-pointer'))))
+
 (def gep-with-index (fn (ptr index label)
                      (c-call LLVMBuildInBoundsGEP *
                       * main-b
@@ -749,12 +760,7 @@
 
   (def label (str 'unpack-' (symbol-name type)))
 
-  (def get-val (fn ()
-                (c-call LLVMBuildBitCast *
-                 * main-b
-                 * (extract-value val 'extract-double')
-                 * double-type
-                 * 'convert-double')))
+  (def get-val (fn () (extract-double val 'value')))
 
   (if (= kind LLVMIntegerTypeKind)
    (if (is-type-unsigned type)
@@ -777,7 +783,7 @@
 (def tr-cast-if-target-c-type-is-pointer
  (fn (type val)
   (if (= (symbol '*') type)
-   (c-call LLVMBuildIntToPtr * * main-b * (extract-value val 'ptr-to-data') * pointer-type * 'cast-to-ptr')
+   (extract-pointer val pointer-type 'ptr-to-data')
    (c-call LLVMConstNull * * (tr-c-type type)))))
 
 (def tr-cast-from-string-to-c-type tr-cast-if-target-c-type-is-pointer)
@@ -1189,12 +1195,8 @@
   (def f-type (get-fn-type num-args))
   (def f-ptr-type (c-call LLVMPointerType * * f-type int 0))
 
-  (def frame-ptr (c-call LLVMBuildIntToPtr *
-                  * main-b
-                  * (extract-value (state-cur-value f-state) 'fn-frame-addr')
-                  * frame-ptr-type
-                  * 'fn-frame-addr-to-ptr'))
-
+  (def frame-ptr (extract-pointer (state-cur-value f-state) frame-ptr-type 'fn-frame-addr'))
+e
   (def target-fn-loc (c-call LLVMBuildInBoundsGEP *
                       * main-b
                       * frame-ptr
@@ -1299,7 +1301,7 @@
        * (gep-list-elem-val list-elem-mem 'list-elem-val-ptr'))
       (c-call LLVMBuildStore *
        * main-b
-       * (c-call LLVMBuildIntToPtr * * main-b * (extract-value l 'l-val') * pointer-type * 'cast-to-ptr')
+       * (extract-pointer l pointer-type 'ptr-to-prev-head')
        * (gep-list-elem-next list-elem-mem 'list-elem-next-ptr'))
 
       (def new-l (build-val list-type-index (c-call LLVMBuildPtrToInt * * main-b * list-elem-mem * i64-type * 'cast-to-int')))
@@ -1326,7 +1328,7 @@
 
       (c-call LLVMPositionBuilderAtEnd void * main-b * list-bb)
 
-      (def head-ptr (c-call LLVMBuildIntToPtr * * main-b * (extract-value l 'l-val') * list-elem-ptr-type * 'head-ptr'))
+      (def head-ptr (extract-pointer l list-elem-ptr-type 'head'))
 
       (def is-empty (c-call LLVMBuildIsNull * * main-b * head-ptr * 'is-empty'))
 
@@ -1361,7 +1363,7 @@
 
       (c-call LLVMPositionBuilderAtEnd void * main-b * list-bb)
 
-      (def head-ptr (c-call LLVMBuildIntToPtr * * main-b * (extract-value l 'l-val') * list-elem-ptr-type * 'head-ptr'))
+      (def head-ptr (extract-pointer l list-elem-ptr-type 'head'))
 
       (def is-empty (c-call LLVMBuildIsNull * * main-b * head-ptr * 'is-empty'))
 
@@ -1386,7 +1388,7 @@
                          (c-call LLVMBuildSelect *
                           * main-b
                           * (tr-type-test number-type-index v)
-                          * (c-call LLVMBuildBitCast * * main-b * (extract-value v 'int-dbl') * double-type * 'dbl')
+                          * (extract-double v 'number')
                           * d
                           * 'num-or-default')))
     (def num-or-zero (fn (v) (num-or-default v zero)))
