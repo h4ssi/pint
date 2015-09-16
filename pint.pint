@@ -1444,7 +1444,18 @@ e
 
       nil)))))
 
-    (def s s-/)
+    (def s-type
+     (built-in-fn s-/ (quote p/type) 1 (fn (frame args) (uncons args (fn (v _)
+      (c-call LLVMBuildRet *
+       * main-b
+       * (build-val number-type-index (c-call LLVMBuildUIToFP *
+                                       * main-b
+                                       * (extract-type-index v 'type-index')
+                                       * double-type
+                                       * 'type-index-as-double')))
+      nil)))))
+
+    (def s s-type)
 
     (def tr^ (fn (c state rec)
       (if (empty? c)
