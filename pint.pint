@@ -1455,7 +1455,41 @@ e
                                        * 'type-index-as-double')))
       nil)))))
 
-    (def s s-type)
+    (def s-ident
+     (built-in-fn s-type (quote p/ident) 2 (fn (frame args) (unpair args (fn (l r)
+      (def t-eq (c-call LLVMBuildICmp *
+                 * main-b
+                 int LLVMIntEQ
+                 * (extract-type-index l 'l-type')
+                 * (extract-type-index r 'r-type')
+                 * 't-eq'))
+
+      (def v-eq (c-call LLVMBuildICmp *
+                 * main-b
+                 int LLVMIntEQ
+                 * (extract-value l 'l-val')
+                 * (extract-value r 'r-val')
+                 * 'v-eq'))
+
+      (def t-ok (c-call LLVMBuildSelect *
+                 * main-b
+                 * t-eq
+                 * l
+                 * (state-cur-value (tr-nil s-type))
+                 * 't-ok'))
+
+      (def v-ok (c-call LLVMBuildSelect *
+                 * main-b
+                 * v-eq
+                 * t-ok
+                 * (state-cur-value (tr-nil s-type))
+                 * 'v-ok'))
+      
+      (c-call LLVMBuildRet * * main-b * v-ok)
+
+      nil)))))
+
+    (def s s-ident)
 
     (def tr^ (fn (c state rec)
       (if (empty? c)
