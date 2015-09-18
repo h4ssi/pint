@@ -482,6 +482,7 @@
 ; state during code gen
 ; contains
 ;   "accumulator" (current-val)
+;   current basic block (when joining on phi nodes we need to know the blocks we are joining from)
 ;   symbol table for each scope
 ;   globals
 ;   a list of borrowed values from an upper scope
@@ -490,6 +491,7 @@
 ;   scope which needs to explicitly borrow refs from parent scope
 ; supported operations
 ;   set/get accumulator
+;   set/get current basic block (set it on branching new states/new scopes)
 ;   set/get symbols from sym tab or globals
 ;   test whether there is an upper state to borrow from (am i root?)
 ;   borrow value from _some_ upper parent
@@ -497,75 +499,83 @@
 ;   merge back
 
 (def state-make (fn (current-value
+                     basic-block
                      parent-state    ; (direct) parent
                      borrow-ancestor ; ancestor to borrow from (maybe parent, maybe not)
                      symbol-table    ; one frame for each scope
                      borrowed-syms
                      globals)
                  (cons current-value
+                 (cons basic-block
                  (cons parent-state
                  (cons borrow-ancestor
                  (cons symbol-table
                  (cons borrowed-syms
-                 (cons globals ()))))))))
+                 (cons globals ())))))))))
 
-(def init-state (fn () (state-make nil nil nil () nil ())))
+(def init-state (fn (bb) (state-make nil bb nil nil () nil ())))
 
 (def state-unmake (fn (s f) (uncons s (fn (cv r)
+                            (uncons r (fn (bb r)
                             (uncons r (fn (pt r)
                             (uncons r (fn (ba r)
                             (uncons r (fn (st r)
                             (uncons r (fn (bs r)
                             (uncons r (fn (gl r)
-                            (f cv pt ba st bs gl)))))))))))))))
+                            (f cv bb pt ba st bs gl)))))))))))))))))
 
-(def state-cur-value (fn (s) (state-unmake s (fn (cv pt ba st bs gl) cv))))
-(def state-set-cur-value (fn (s cv) (state-unmake s (fn (cv^ pt ba st bs gl)
-                                    (state-make cv pt ba st bs gl)))))
+(def state-cur-value (fn (s) (state-unmake s (fn (cv bb pt ba st bs gl) cv))))
+(def state-set-cur-value (fn (s cv) (state-unmake s (fn (cv^ bb pt ba st bs gl)
+                                    (state-make cv bb pt ba st bs gl)))))
 
-(def state-get-global (fn (s key) (state-unmake s (fn (cv pt ba st bs gl) (getk gl key)))))
-(def state-add-global (fn (s key val) (state-unmake s (fn (cv pt ba st bs gl)
-                                      (state-make cv pt ba st bs (assoc gl key val))))))
+(def state-bb (fn (s) (state-unmake s (fn (cv bb pt ba st bs gl) bb))))
+(def state-set-bb (fn (s bb) (state-unmake s (fn (cv bb^ pt ba st bs gl)
+                             (state-make cv bb pt ba st bs gl)))))
 
-(def state-get-local (fn (s key) (state-unmake s (fn (cv pt ba st bs gl) (getk st key)))))
-(def state-add-local (fn (s key val) (state-unmake s (fn (cv pt ba st bs gl)
-                                     (state-make cv pt ba (assoc st key val) bs gl)))))
+
+(def state-get-global (fn (s key) (state-unmake s (fn (cv bb pt ba st bs gl) (getk gl key)))))
+(def state-add-global (fn (s key val) (state-unmake s (fn (cv bb pt ba st bs gl)
+                                      (state-make cv bb pt ba st bs (assoc gl key val))))))
+
+(def state-get-local (fn (s key) (state-unmake s (fn (cv bb pt ba st bs gl) (getk st key)))))
+(def state-add-local (fn (s key val) (state-unmake s (fn (cv bb pt ba st bs gl)
+                                     (state-make cv bb pt ba (assoc st key val) bs gl)))))
 
 (def state-borrow (fn (s sym)
  (def sb^ (fn (c rec)
   (if (nil? c)
    nil
-   (state-unmake c (fn (cv pt ba st bs gl)
+   (state-unmake c (fn (cv bb pt ba st bs gl)
     (def ref (getk st sym))
 
     (if ref
      ref
      (rec ba rec)))))))
 
- (state-unmake s (fn (cv pt ba st bs gl)
+ (state-unmake s (fn (cv bb pt ba st bs gl)
   (if (in-list sym bs) ; already borrowed?
    s
    (if (or (sb^ ba sb^) (getk gl sym))
-    (state-make cv pt ba st (reverse (cons sym (reverse bs))) gl)
+    (state-make cv bb pt ba st (reverse (cons sym (reverse bs))) gl)
     (print '[E] undefined var: ' (symbol-name sym) newline)))))))
 
-(def state-borrow-list (fn (s) (state-unmake s (fn (cv pt ba st bs gl) bs))))
+(def state-borrow-list (fn (s) (state-unmake s (fn (cv bb pt ba st bs gl) bs))))
 
-(def state-can-borrow (fn (s) (state-unmake s (fn (cv pt ba st bs gl) ba))))
+(def state-can-borrow (fn (s) (state-unmake s (fn (cv bb pt ba st bs gl) ba))))
 
-(def state-branch-direct (fn (s) (state-unmake s (fn (cv pt ba st bs gl)
-                                 (state-make cv s ba st bs gl)))))
-(def state-branch-borrow (fn (s) (state-unmake s (fn (cv pt ba st bs gl)
-                                 (state-make cv s s () () gl)))))
+(def state-branch-direct (fn (s bb) (state-unmake s (fn (cv bb^ pt ba st bs gl)
+                                    (state-make cv bb s ba st bs gl)))))
+(def state-branch-borrow (fn (s bb) (state-unmake s (fn (cv bb^ pt ba st bs gl)
+                                    (state-make cv bb s s () () gl)))))
 
-(def state-branch-is-borrow (fn (s) (state-unmake s (fn (cv pt ba st bs gl) (= pt ba)))))
+(def state-branch-is-borrow (fn (s) (state-unmake s (fn (cv bb pt ba st bs gl) (= pt ba)))))
 
 (def state-merge (fn (s)
-                  (state-unmake s  (fn ( cv  pt  ba  st  bs  gl)
-                  (state-unmake pt (fn (pcv ppt pba pst pbs pgl)
+                  (state-unmake s  (fn ( cv  bb  pt  ba  st  bs  gl)
+                  (state-unmake pt (fn (pcv pbb ppt pba pst pbs pgl)
                    (if (state-branch-is-borrow s)
-                    (state-make pcv ppt pba pst pbs gl)
-                    (state-make pcv ppt pba pst  bs gl)))))))) ; todo merge strat for accumulator?
+                    (state-make pcv pbb ppt pba pst pbs gl)
+                    (state-make pcv pbb ppt pba pst  bs gl)))))))) ; todo merge strat for accumulator?
 
 (def i32-const (fn (i) (c-call LLVMConstInt * * i32-type int i int 1)))
 (def i64-const (fn (i) (c-call LLVMConstInt * * i64-type int i int 1)))
@@ -866,7 +876,9 @@
       c-pointer-cast-bb)
    int 6)
 
-  (state-set-cur-value state phi)))
+  (state-set-bb
+   (state-set-cur-value state phi)
+   merge-block)))
 
 (def build-val
  (fn (type-id val)
@@ -951,7 +963,8 @@
                     (unpair typed-arg
                      (fn (type arg)
                       (def st^ (tr (cons arg ()) st tr))
-                      (pair st^ (tr-cast-to-c-type st^ type (state-cur-value st^))))))
+                      (def st^^ (tr-cast-to-c-type st^ type (state-cur-value st^)))
+                      (pair st^^ (state-cur-value st^^)))))
                    state^
                    (reverse (head typed-args))))
 
@@ -964,7 +977,7 @@
   (def res (c-call LLVMBuildCall *
             * main-b
             * target-fn
-            * (apply c-array (map state-cur-value c-casted-args))
+            * (apply c-array c-casted-args)
             int num-args
             * (if is-void '' (str 'call-' (symbol-name fn-name)))))
 
@@ -1009,13 +1022,13 @@
    (c-call LLVMBuildCondBr * * main-b * cond-true? * then-bb * else-bb)
 
    (c-call LLVMPositionBuilderAtEnd void * main-b * then-bb)
-   (def s^then (tr (cons then ()) (state-branch-direct s^) tr))
+   (def s^then (tr (cons then ()) (state-branch-direct s^ then-bb) tr))
    (def s^^ (state-merge s^then))
    (c-call LLVMBuildBr * * main-b * merge-bb)
 
 
    (c-call LLVMPositionBuilderAtEnd void * main-b * else-bb)
-   (def s^else (tr (cons else ()) (state-branch-direct s^^) tr))
+   (def s^else (tr (cons else ()) (state-branch-direct s^^ else-bb) tr))
    (def s^^^ (state-merge s^else))
    (c-call LLVMBuildBr * * main-b * merge-bb)
 
@@ -1029,8 +1042,8 @@
        (state-cur-value s^then)
        (state-cur-value s^else))
    * (c-array
-      then-bb
-      else-bb)
+      (state-bb s^then)
+      (state-bb s^else))
    int 2)
 
    (state-set-cur-value s^^^ phi))))))))))
@@ -1055,7 +1068,7 @@
   (def frame-reg (c-call LLVMGetParam * * f int 0))
   (def arg-regs (map (fn (i) (c-call LLVMGetParam * * f int (+ i 1))) (range num-args)))
 
-  (def ret (gen-body frame-reg arg-regs))
+  (def ret (gen-body frame-reg arg-regs bb))
 
   (c-call LLVMPositionBuilderAtEnd void * main-b * prev)
 
@@ -1105,11 +1118,11 @@
 
   (uncons (tail form) (fn (args body)
    (def num-args (listlen args))
-   (def local-state (state-branch-borrow state))
 
    (unpair
     (gen-fn num-args
-     (fn (frame-reg arg-regs)
+     (fn (frame-reg arg-regs bb)
+      (def local-state (state-branch-borrow state bb))
 
       (def local-state^
        (leduce (fn (st arg)
@@ -1257,16 +1270,16 @@
 
 (def tr
   (fn (code)
-    (def s-malloc (state-add-global-fn (init-state) (quote malloc) (quote *) (cons (quote uint) ())))
+    (def s-malloc (state-add-global-fn (init-state main-bb) (quote malloc) (quote *) (cons (quote uint) ())))
 
     (def built-in-fn
      (fn (state name num-args body)
-      (def f (fst (gen-fn num-args body)))
+      (def f (fst (gen-fn num-args (fn (frame args bb) (body args)))))
       (def f-val (state-cur-value (gen-fn-frame state f ())))
       (state-add-local state name f-val)))
 
     (def s-cons
-     (built-in-fn s-malloc (quote cons) 2 (fn (frame args) (unpair args (fn (e l)
+     (built-in-fn s-malloc (quote cons) 2 (fn (args) (unpair args (fn (e l)
       (def f (c-call LLVMGetBasicBlockParent * * (c-call LLVMGetInsertBlock * * main-b)))
 
       (def nil-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'is-nil'))
@@ -1311,7 +1324,7 @@
       nil)))))
 
     (def s-head
-     (built-in-fn s-cons (quote head) 1 (fn (frame args) (uncons args (fn (l _)
+     (built-in-fn s-cons (quote head) 1 (fn (args) (uncons args (fn (l _)
       (def f (c-call LLVMGetBasicBlockParent * * (c-call LLVMGetInsertBlock * * main-b)))
 
       (def nil-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'is-nil'))
@@ -1346,7 +1359,7 @@
       nil)))))
 
     (def s-tail
-     (built-in-fn s-head (quote tail) 1 (fn (frame args) (uncons args (fn (l _)
+     (built-in-fn s-head (quote tail) 1 (fn (args) (uncons args (fn (l _)
       (def f (c-call LLVMGetBasicBlockParent * * (c-call LLVMGetInsertBlock * * main-b)))
 
       (def nil-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'is-nil'))
@@ -1395,7 +1408,7 @@
     (def num-or-one (fn (v) (num-or-default v one)))
 
     (def s-+
-     (built-in-fn s-tail (quote +) 2 (fn (frame args) (unpair args (fn (l r)
+     (built-in-fn s-tail (quote +) 2 (fn (args) (unpair args (fn (l r)
       (def s zero)
 
       (def s^  (c-call LLVMBuildFAdd * * main-b * s  * (num-or-zero l) * 's1'))
@@ -1408,7 +1421,7 @@
       nil)))))
 
     (def s-*
-     (built-in-fn s-+ (quote *) 2 (fn (frame args) (unpair args (fn (l r)
+     (built-in-fn s-+ (quote *) 2 (fn (args) (unpair args (fn (l r)
       (def p one)
 
       (def p^  (c-call LLVMBuildFMul * * main-b * p  * (num-or-one l) * 'p1'))
@@ -1421,7 +1434,7 @@
       nil)))))
 
     (def s--
-     (built-in-fn s-* (quote -) 1 (fn (frame args) (uncons args (fn (n _)
+     (built-in-fn s-* (quote -) 1 (fn (args) (uncons args (fn (n _)
       (def d zero)
 
       (def d^ (c-call LLVMBuildFSub * * main-b * d * (num-or-zero n) * 'diff'))
@@ -1433,7 +1446,7 @@
       nil)))))
 
     (def s-/
-     (built-in-fn s-- (quote /) 1 (fn (frame args) (uncons args (fn (n _)
+     (built-in-fn s-- (quote /) 1 (fn (args) (uncons args (fn (n _)
       (def q one)
 
       (def q^ (c-call LLVMBuildFDiv * * main-b * q * (num-or-one n) * 'quot'))
@@ -1445,7 +1458,7 @@
       nil)))))
 
     (def s-type
-     (built-in-fn s-/ (quote p/type) 1 (fn (frame args) (uncons args (fn (v _)
+     (built-in-fn s-/ (quote p/type) 1 (fn (args) (uncons args (fn (v _)
       (c-call LLVMBuildRet *
        * main-b
        * (build-val number-type-index (c-call LLVMBuildUIToFP *
@@ -1456,7 +1469,7 @@
       nil)))))
 
     (def s-ident
-     (built-in-fn s-type (quote p/ident) 2 (fn (frame args) (unpair args (fn (l r)
+     (built-in-fn s-type (quote p/ident) 2 (fn (args) (unpair args (fn (l r)
       (def t-eq (c-call LLVMBuildICmp *
                  * main-b
                  int LLVMIntEQ
