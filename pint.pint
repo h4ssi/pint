@@ -1046,7 +1046,9 @@
       (state-bb s^else))
    int 2)
 
-   (state-set-cur-value s^^^ phi))))))))))
+   (state-set-bb
+    (state-set-cur-value s^^^ phi)
+    merge-bb))))))))))
 
 (def get-fn-type
  (fn (num-args)
