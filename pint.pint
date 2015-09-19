@@ -90,7 +90,7 @@
 (def and (fn (a b) (if a b a)))
 (def or (fn (a b) (if a a b)))
 
-(def empty? (fn (l) (nil? (tail l))))
+(def empty? (fn (l) (if (tail l) nil l)))
 
 (def pair
   (fn (l r)

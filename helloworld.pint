@@ -1,6 +1,75 @@
-(def msg 'hello world!')
+(def newline '
+')
 
-(def hw (fn ()
-    (c-call puts int * msg)))
+(def nil (head ()))
+(def not (fn (x) (if x nil '')))
+(def empty? (fn (l) (if (tail l) nil l)))
+(def =)
+(def str)
 
-(hw)
+(def impls (fn (interpreted compiled) (if p/ident compiled interpreted)))
+(def dyn-type-test (fn (val type-index) (p/ident (p/type val) type-index)))
+
+(def is-number
+ (impls
+  (fn (o) (= o (+ 0 o)))
+  (fn (o) (dyn-type-test o 1))))
+
+(def is-string
+ (impls
+  (fn (o) (= o (str o)))
+  (fn (o) (dyn-type-test o 2))))
+
+(def is-list
+ (impls
+  (fn (o) (if (= o ()) o (tail o)))
+  (fn (o) (dyn-type-test o 3))))
+
+(def is-fn
+ (impls
+  (fn (o) (if o (not (= o o)) o))
+  (fn (o) (dyn-type-test o 4))))
+
+(def = (impls = (fn (a b)
+ (def =^ (fn (a b rec)
+  (if a
+   (if (is-fn a)
+    nil ; fns are never eq
+    (if (p/ident a b)
+     a
+     (if (is-string a)
+      (if (is-string b)
+       (p/ident 0 (c-call strcmp int * a * b))
+       nil) ; a string, b is not
+      (if (is-list a)
+       (if (is-list b)
+        (if (empty? a)
+         (empty? b)
+         (if (rec (head a) (head b) rec)
+          (rec (tail a) (tail b) rec)
+          nil)) ; heads diff
+        nil) ; a list, b is not
+       nil)))) ; default
+  nil))) ; a is nil
+
+ (=^ a b =^))))
+
+(def pr (fn (s) (c-call printf int * '%s' * s)))
+
+(pr (if (= 1 1) 'hel' ''))
+
+(pr (if (= 1 2) 'NOPE' ''))
+
+(pr (if (= '1' '1') 'lo ' ''))
+
+(pr (if (= '1' '2') 'NOPE' ''))
+
+(pr (if (= (cons 1 (cons 1 ())) (cons 1 (cons 1 ()))) 'wor' ''))
+
+(pr (if (= (cons 1 (cons 2 ())) (cons 1 (cons 1 ()))) 'NOPE' ''))
+
+(pr (if (= pr pr) '' 'ld!'))
+
+(pr (if (= pr empty?) 'NOPE' ''))
+
+(pr newline)
