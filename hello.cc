@@ -597,19 +597,30 @@ void setup() {
       });
   root["c-array"] =
       std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
-        auto p = std::make_unique<void *[]>(l.size());
+        for (auto const &v : l) {
+          if (auto a = dynamic_cast<List *>(v.get())) {
+            std::size_t len = 0;
 
-        std::size_t i = 0;
-        for (auto const &e : l) {
-          if (auto pp = dynamic_cast<CPointer *>(e.get())) {
-            p[i] = pp->value();
-          } else {
-            p[i] = nullptr;
+            for (auto const &e : a->value()) {
+              ++len;
+            }
+            auto p = std::make_unique<void *[]>(len);
+
+            std::size_t i = 0;
+            for (auto const &e : a->value()) {
+              if (auto pp = dynamic_cast<CPointer *>(e.get())) {
+                p[i] = pp->value();
+              } else {
+                p[i] = nullptr;
+              }
+              ++i;
+            }
+
+            return std::make_shared<CArray<void *>>(std::move(p));
           }
-          ++i;
+          break;
         }
-
-        return std::make_shared<CArray<void *>>(std::move(p));
+        return nullptr;
       });
   root["c-str"] =
       std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
