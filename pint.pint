@@ -580,6 +580,23 @@
 (def i32-const (fn (i) (c-call LLVMConstInt * * i32-type int i int 1)))
 (def i64-const (fn (i) (c-call LLVMConstInt * * i64-type int i int 1)))
 
+(def size-of-i64
+ (fn (t n)
+  (c-call LLVMBuildPtrToInt *
+   * main-b
+   * (c-call LLVMBuildGEP *
+      * main-b
+      * (c-call LLVMConstNull * * (c-call LLVMPointerType * * t int 0))
+      * (c-array (cons (i64-const n) ()))
+      int 1
+      * 'size-of-ptr')
+   * i64-type
+   * 'size-of-i64')))
+
+(def size-of-i32
+ (fn (t n)
+  (c-call LLVMBuildTrunc * * main-b * (size-of-i64 t n) * i32-type * 'size-of-i32')))
+
 (def nil-type-index (i64-const 0)) ; type 0 = nil
 (def number-type-index (i64-const 1)) ; type 1 = number
 (def string-type-index (i64-const 2)) ; type 2 = string
