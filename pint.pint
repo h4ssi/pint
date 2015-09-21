@@ -1259,6 +1259,29 @@
 
   (state-set-cur-value state^ res)))))
 
+(def tr-c-array
+ (fn (form state tr)
+  ; todo check for length
+  (uncons (tail form) (fn (type r)
+  (uncons r           (fn (num  _)
+
+   (def c-type (tr-c-type type))
+
+   (def array-mem (c-call LLVMBuildCall *
+                   * main-b
+                   * (snd (state-get-global state (quote malloc)))
+                   * (c-array (cons (size-of-i32 c-type num) ()))
+                   int 1
+                   * 'alloc-array'))
+
+   (def array-addr (c-call LLVMBuildPtrToInt *
+                    * main-b
+                    * array-mem
+                    * i64-type
+                    * 'array-addr'))
+
+   (state-set-cur-value state (build-val c-pointer-type-index array-addr))))))))
+
 (def tr-form
  (fn (form state tr)
    (if (empty? form)
@@ -1270,13 +1293,16 @@
    (if (= (symbol 'c-call') (head form))
      (tr-c-call form state tr)
 
+   (if (= (symbol 'c-array') (head form))
+     (tr-c-array form state tr)
+
    (if (= (symbol 'if') (head form))
      (tr-if form state tr)
 
    (if (= (symbol 'fn') (head form))
      (tr-fn form state tr)
 
-   (tr-call form state tr))))))))
+   (tr-call form state tr)))))))))
 
 (def tr-type-test
  (fn (type-index val)
