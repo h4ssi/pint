@@ -46,7 +46,7 @@
 (c-call LLVMDumpModule void * m)
 
 (c-call LLVMLinkInMCJIT void)
-(c-call ExternLLVMInitializeNativeTarget void) ; todo inlining does not work :(
+(c-call ExternLLVMInitializeNativeTarget void) ; todo inlining does not work :/
 (c-call ExternLLVMInitializeNativeAsmPrinter void) 
 
 (def ee (c-ref))
