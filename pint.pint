@@ -18,7 +18,7 @@
 (def c (c-call LLVMGetGlobalContext *))
 (def m (c-call LLVMModuleCreateWithNameInContext * * 'test' * c))
 (def i (c-call LLVMInt32TypeInContext * * c))
-(def ps (c-array (cons i (cons i ()))))
+(def ps (c-ptr-array (cons i (cons i ()))))
 (def ft (c-call LLVMFunctionType * * i * ps int 2 int 0))
 (def f (c-call LLVMAddFunction * * m * 'plus' * ft))
 (def bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'entry'))
@@ -452,19 +452,19 @@
 (def pointer-type (c-call LLVMPointerType * * i8-type int 0))
 
 (def value-type (c-call LLVMStructCreateNamed * * c * 'value_type'))
-(c-call LLVMStructSetBody void * value-type * (c-array (cons i64-type (cons i64-type ()))) int 2 int 0)
+(c-call LLVMStructSetBody void * value-type * (c-ptr-array (cons i64-type (cons i64-type ()))) int 2 int 0)
 
 (def value-ptr-type (c-call LLVMPointerType * * value-type int 0))
 
 (def list-elem-type (c-call LLVMStructCreateNamed * * c * 'list_elem_type'))
-(c-call LLVMStructSetBody void * list-elem-type * (c-array (cons value-type (cons pointer-type ()))) int 2 int 0)
+(c-call LLVMStructSetBody void * list-elem-type * (c-ptr-array (cons value-type (cons pointer-type ()))) int 2 int 0)
 
 (def list-elem-ptr-type (c-call LLVMPointerType * * list-elem-type int 0))
 
 (def frame-type (c-call LLVMStructCreateNamed * * c * 'frame_type'))
 (c-call LLVMStructSetBody void
  * frame-type
- * (c-array (cons pointer-type (cons (c-call LLVMArrayType * * value-type int 0) ())))
+ * (c-ptr-array (cons pointer-type (cons (c-call LLVMArrayType * * value-type int 0) ())))
  int 2
  int 0)
 
@@ -472,7 +472,7 @@
 
 (def void-type (c-call LLVMVoidTypeInContext * * c))
 
-(def main-f-type (c-call LLVMFunctionType * * void-type * (c-array ()) int 0 int 0))
+(def main-f-type (c-call LLVMFunctionType * * void-type * (c-ptr-array ()) int 0 int 0))
 (def main-f (c-call LLVMAddFunction * * m * 'main' * main-f-type))
 (def main-bb (c-call LLVMAppendBasicBlockInContext * * c * main-f * 'entry'))
 (def main-b (c-call LLVMCreateBuilder *))
@@ -587,7 +587,7 @@
    * (c-call LLVMBuildGEP *
       * main-b
       * (c-call LLVMConstNull * * (c-call LLVMPointerType * * t int 0))
-      * (c-array (cons (i64-const n) ()))
+      * (c-ptr-array (cons (i64-const n) ()))
       int 1
       * 'size-of-ptr')
    * i64-type
@@ -630,7 +630,7 @@
                      (c-call LLVMBuildInBoundsGEP *
                       * main-b
                       * ptr
-                      * (c-array (cons (i64-const 0) (cons (i32-const index) ())))
+                      * (c-ptr-array (cons (i64-const 0) (cons (i32-const index) ())))
                      int 2
                      * label)))
 (def gep-list-elem-val (fn (list-elem label) (gep-with-index list-elem 0 label)))
@@ -640,7 +640,7 @@
  (state-set-cur-value state
   (c-call LLVMConstNamedStruct *
     * value-type
-    * (c-array
+    * (c-ptr-array
         (cons nil-type-index
         (cons (c-call LLVMConstNull * * i64-type) ())))
     int 2))))
@@ -649,7 +649,7 @@
   (state-set-cur-value state
    (c-call LLVMConstNamedStruct *
      * value-type
-     * (c-array
+     * (c-ptr-array
          (cons number-type-index
          (cons (c-call LLVMBuildBitCast * * main-b * (c-call LLVMConstReal * * double-type double number) * i64-type * 'pack-dbl') ())))
      int 2))))
@@ -673,14 +673,14 @@
  (state-set-cur-value state
   (c-call LLVMConstNamedStruct *
     * value-type
-    * (c-array
+    * (c-ptr-array
         (cons string-type-index
         (cons (c-call LLVMBuildPtrToInt *
                * main-b
                * (c-call LLVMBuildInBoundsGEP *
                   * main-b
                   * strmem
-                  * (c-array (cons (i64-const 0) ()))
+                  * (c-ptr-array (cons (i64-const 0) ()))
                   int 1
                   * 'str to ptr')
                * i64-type
@@ -692,7 +692,7 @@
   (state-set-cur-value state
    (c-call LLVMConstNamedStruct *
     * value-type
-    * (c-array
+    * (c-ptr-array
        (cons list-type-index
        (cons (c-call LLVMConstNull * * i64-type) ())))
     int 2))))
@@ -707,7 +707,7 @@
     (def val-loc (c-call LLVMBuildInBoundsGEP *
                   * main-b
                   * (state-get-local s^ '')
-                  * (c-array (cons (i64-const index) ()))
+                  * (c-ptr-array (cons (i64-const index) ()))
                   int 1
                   * 'value-ptr'))
     (def val (c-call LLVMBuildLoad *
@@ -877,14 +877,14 @@
 
   (c-call LLVMAddIncoming void
    * phi
-   * (c-array
+   * (c-ptr-array
       (cons nil-cast-v
       (cons number-cast-v
       (cons string-cast-v
       (cons list-cast-v
       (cons function-cast-v
       (cons c-pointer-cast-v ())))))))
-   * (c-array
+   * (c-ptr-array
       (cons nil-cast-bb
       (cons number-cast-bb
       (cons string-cast-bb
@@ -903,7 +903,7 @@
           * main-b
           * (c-call LLVMConstNamedStruct *
                     * value-type
-                    * (c-array (cons type-id (cons (c-call LLVMGetUndef * * i64-type) ())))
+                    * (c-ptr-array (cons type-id (cons (c-call LLVMGetUndef * * i64-type) ())))
                     int 2)
           * (c-call LLVMBuildBitCast *
                     * main-b
@@ -949,7 +949,7 @@
   (def c-typed-args (map (fn (type) (tr-c-type type)) arg-types))
   (def num-args (listlen c-typed-args))
   
-  (def arg-t-array (c-array c-typed-args))
+  (def arg-t-array (c-ptr-array c-typed-args))
   (def fn-t (c-call LLVMFunctionType * * ret-c-type * arg-t-array int num-args int 0))
 
   (c-call LLVMAddFunction * * m * (symbol-name name) * fn-t)))
@@ -994,7 +994,7 @@
   (def res (c-call LLVMBuildCall *
             * main-b
             * target-fn
-            * (c-array c-casted-args)
+            * (c-ptr-array c-casted-args)
             int num-args
             * (if is-void '' (str 'call-' (symbol-name fn-name)))))
 
@@ -1055,10 +1055,10 @@
 
    (c-call LLVMAddIncoming void
     * phi
-    * (c-array
+    * (c-ptr-array
        (cons (state-cur-value s^then)
        (cons (state-cur-value s^else) ())))
-    * (c-array
+    * (c-ptr-array
        (cons (state-bb s^then)
        (cons (state-bb s^else) ())))
    int 2)
@@ -1069,7 +1069,7 @@
 
 (def get-fn-type
  (fn (num-args)
-   (def arg-t-array (c-array (cons value-ptr-type (map (fn (arg) value-type) (range num-args)))))
+   (def arg-t-array (c-ptr-array (cons value-ptr-type (map (fn (arg) value-type) (range num-args)))))
 
    (c-call LLVMFunctionType * * value-type * arg-t-array int (+ num-args 1) int 0)))
 
@@ -1101,7 +1101,7 @@
    (def frame-mem (c-call LLVMBuildCall *
                    * main-b
                    * (snd (state-get-global state (quote malloc)))
-                   * (c-array (cons (i32-const frame-size) ()))
+                   * (c-ptr-array (cons (i32-const frame-size) ()))
                    int 1
                    * 'alloc-frame'))
    ; todo memory management & free!!!
@@ -1109,7 +1109,7 @@
    (c-call LLVMBuildStore *
     * main-b
     * (c-call LLVMBuildBitCast * * main-b * f * pointer-type * 'cast-f-to-f-tpr')
-    * (c-call LLVMBuildInBoundsGEP * * main-b * frame * (c-array (cons (i64-const 0) (cons (i32-const 0) ()))) int 2 * 'func-ptr-loc'))
+    * (c-call LLVMBuildInBoundsGEP * * main-b * frame * (c-ptr-array (cons (i64-const 0) (cons (i32-const 0) ()))) int 2 * 'func-ptr-loc'))
    (def state^
     (leduce (fn (st borrowed)
              (unpair borrowed (fn (i b)
@@ -1118,7 +1118,7 @@
               (def loc (c-call LLVMBuildInBoundsGEP *
                         * main-b
                         * frame
-                        * (c-array (cons (i64-const 0) (cons (i32-const 1) (cons (i64-const i) ()))))
+                        * (c-ptr-array (cons (i64-const 0) (cons (i32-const 1) (cons (i64-const i) ()))))
                         int 3
                         * (str 'capture-' (symbol-name b) '-addr')))
               (c-call LLVMBuildStore * * main-b * (state-cur-value st^) * loc)
@@ -1232,14 +1232,14 @@
   (def target-fn-loc (c-call LLVMBuildInBoundsGEP *
                       * main-b
                       * frame-ptr
-                      * (c-array (cons (i64-const 0) (cons (i32-const 0) ())))
+                      * (c-ptr-array (cons (i64-const 0) (cons (i32-const 0) ())))
                       int 2
                       * 'fn-addr'))
 
   (def borrowed-vals-loc (c-call LLVMBuildInBoundsGEP *
                           * main-b
                           * frame-ptr
-                          * (c-array (cons (i64-const 0) (cons (i32-const 1) (cons (i64-const 0) ()))))
+                          * (c-ptr-array (cons (i64-const 0) (cons (i32-const 1) (cons (i64-const 0) ()))))
                           int 3
                           * 'borrowed-vals-addr'))
 
@@ -1253,7 +1253,7 @@
   (def res (c-call LLVMBuildCall *
             * main-b
             * target-fn
-            * (c-array (cons borrowed-vals-loc (map state-cur-value arg-states)))
+            * (c-ptr-array (cons borrowed-vals-loc (map state-cur-value arg-states)))
             int (+ num-args 1)
             * 'call-fn'))
 
@@ -1270,7 +1270,7 @@
    (def array-mem (c-call LLVMBuildCall *
                    * main-b
                    * (snd (state-get-global state (quote malloc)))
-                   * (c-array (cons (size-of-i32 c-type num) ()))
+                   * (c-ptr-array (cons (size-of-i32 c-type num) ()))
                    int 1
                    * 'alloc-array'))
 
@@ -1343,7 +1343,7 @@
       (def alloc (c-call LLVMBuildCall *
                   * main-b
                   * (snd (state-get-global s-malloc (quote malloc)))
-                  * (c-array (cons (i32-const 24) ()))
+                  * (c-ptr-array (cons (i32-const 24) ()))
                   int 1
                   * 'list-elem-mem-void-ptr'))
 

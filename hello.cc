@@ -595,7 +595,7 @@ void setup() {
         }
         return p == nullptr ? std::make_shared<Text>("") : *p;
       });
-  root["c-array"] =
+  root["c-ptr-array"] =
       std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
         for (auto const &v : l) {
           if (auto a = dynamic_cast<List *>(v.get())) {
