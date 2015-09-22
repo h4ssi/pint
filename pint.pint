@@ -1282,6 +1282,27 @@
 
    (state-set-cur-value state (build-val c-pointer-type-index array-addr))))))))
 
+(def tr-c-array-addr
+ (fn (type index ptr)
+  (def c-type (tr-c-type type))
+
+  (def idx-int (c-call LLVMBuildFPToUI *
+                * main-b
+                * (extract-double index 'idx-dbl')
+                * i64-type
+                * 'idx-i64'))
+
+  (c-call LLVMBuildGEP *
+   * main-b
+   * (c-call LLVMBuildIntToPtr *
+      * main-b
+      * (extract-value ptr 'ptr-i64')
+      * (c-call LLVMPointerType * * c-type int 0)
+      * 'ptr')
+   * (c-ptr-array (cons idx-int ()))
+   int 1
+   * 'array-cell')))
+
 (def tr-c-array-set
  (fn (form state tr)
   ; todo check for length
@@ -1290,30 +1311,13 @@
   (uncons r           (fn (array r)
   (uncons r           (fn (value r)
 
-  (def c-type (tr-c-type type))
-
   (def idx (tr (cons index ()) state tr))
 
   (def ptr (tr (cons array ()) idx tr))
 
   (def val (tr (cons value ()) ptr tr))
 
-  (def idx-int (c-call LLVMBuildFPToUI *
-                * main-b
-                * (extract-double (state-cur-value idx) 'idx-dbl')
-                * i64-type
-                * 'idx-i64'))
-
-  (def addr (c-call LLVMBuildGEP *
-             * main-b
-             * (c-call LLVMBuildIntToPtr *
-                * main-b
-                * (extract-value (state-cur-value ptr) 'ptr-i64')
-                * (c-call LLVMPointerType * * c-type int 0)
-                * 'ptr')
-             * (c-ptr-array (cons idx-int ()))
-             int 1
-             * 'array-cell'))
+  (def addr (tr-c-array-addr type (state-cur-value idx) (state-cur-value ptr)))
 
   (def casted-val (tr-cast-to-c-type val type (state-cur-value val)))
 
@@ -1323,6 +1327,28 @@
    * addr)
 
   casted-val))))))))))
+
+(def tr-c-array-get
+ (fn (form state tr)
+  ; todo check for length
+  (uncons (tail form) (fn (type r)
+  (uncons r           (fn (index r)
+  (uncons r           (fn (array r)
+
+  (def idx (tr (cons index ()) state tr))
+
+  (def ptr (tr (cons array ()) idx tr))
+
+  (def addr (tr-c-array-addr type (state-cur-value idx) (state-cur-value ptr)))
+
+  (def val (c-call LLVMBuildLoad *
+            * main-b
+            * addr
+            * 'loaded-val'))
+
+  (state-set-cur-value
+   ptr
+   (tr-cast-from-c-type ptr type val))))))))))
 
 (def tr-form
  (fn (form state tr)
@@ -1341,13 +1367,16 @@
    (if (= (symbol 'c-array-set') (head form))
      (tr-c-array-set form state tr)
 
+   (if (= (symbol 'c-array-get') (head form))
+     (tr-c-array-get form state tr)
+
    (if (= (symbol 'if') (head form))
      (tr-if form state tr)
 
    (if (= (symbol 'fn') (head form))
      (tr-fn form state tr)
 
-   (tr-call form state tr))))))))))
+   (tr-call form state tr)))))))))))
 
 (def tr-type-test
  (fn (type-index val)
