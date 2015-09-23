@@ -443,16 +443,16 @@ void setup() {
         }
         return nullptr;
       });
-  root["str"] = std::make_shared<Function>([](auto const &l) {
-    auto rl = l;
-    std::reverse(begin(rl), end(rl));
-    list_head<std::shared_ptr<Value>> ll;
-    for (auto const &v : rl) {
-      ll.emplace_front(v);
-    }
-    List lll(ll);
-    return std::make_shared<Text>(to_string(&lll));
-  });
+  root["str"] =
+      std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
+        for (auto const &v : l) {
+          if (auto ll = dynamic_cast<List *>(v.get())) {
+            return std::make_shared<Text>(to_string(ll));
+          }
+          break;
+        }
+        return nullptr;
+      });
   root["substr"] =
       std::make_shared<Function>([](auto const &l) -> std::shared_ptr<Value> {
         auto i = begin(l);

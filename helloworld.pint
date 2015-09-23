@@ -17,7 +17,7 @@
 
 (def is-string
  (impls
-  (fn (o) (= o (str o)))
+  (fn (o) (= o (str (cons o))))
   (fn (o) (dyn-type-test o 2))))
 
 (def is-list

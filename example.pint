@@ -89,7 +89,7 @@
 (twice (twice (twice (print dbl)))) ; do not print this here (print 'lel')
 (print ' Batman!')
 
-(test (= (str 1 2 3 'a' 'b' 'c' (quote d) (quote e) (quote f)) '123abcdef') 'str concat works')
+(test (= (str (cons 1 (cons 2 (cons 3 (cons 'a' (cons 'b' (cons 'c' (cons (quote d) (cons (quote e) (cons (quote f) ())))))))))) '123abcdef') 'str concat works')
 (test (= (substr 'asdf') 'asdf') 'substr with string only')
 (test (= (substr 'asdf' 2) 'df') 'substr with start only')
 (test (= (substr 'asdf' 4) '') 'substr with start = length')
@@ -117,7 +117,7 @@
 (test (not (is-number c-test-val)) 'c value is not a number')
 (test (not (is-number print)) '(print ...) is not a number')
 
-(def is-string (fn (o) (= o (str o))))
+(def is-string (fn (o) (= o (str (cons o ())))))
 
 (test (not (is-string nil)) 'nil is not a string')
 (test (not (is-string 7)) '7 is not a string')
@@ -161,9 +161,9 @@
 (test (not (is-fn c-test-val)) 'c value is not a fn')
 (test (is-fn print) '(print ...) is not a fn')
 
-(test (= (apply str (cons 1 (cons 2 (cons 3 ())))) '123') 'apply list as args to str')
+(test (= (apply + (cons 1 (cons 2 ()))) 3) 'apply list as args to +')
 
-(print (str 'tests: ' num-tests ' failed: ' failed-tests))
+(print (str (cons 'tests: ' (cons num-tests (cons ' failed: ' (cons failed-tests ()))))))
 
 failed-tests
 

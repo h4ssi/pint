@@ -81,7 +81,7 @@
 
 (def newline '
 ')
-(def whitespace (str ' 	' newline))
+(def whitespace (str (cons ' 	' (cons newline ()))))
 (def digit '0123456789')
 
 (def nil? (fn (w) (if w nil '')))
@@ -305,7 +305,7 @@
 (def parse-sym 
   (fn (cs prs)
     (def sym-char
-      (fn (c) (not (in-str c (str whitespace CP OP '\';')))))
+      (fn (c) (not (in-str c (str (cons whitespace (cons CP (cons OP (cons '\';' ())))))))))
 
     (pair 
       (symbol (str (take-while sym-char cs)))
@@ -360,7 +360,7 @@
                   (err ccs 'missing end of list')
                   (if (= CP (head r))
                     (pair () (tail r))
-                    (err ccs (str 'unexpected: ' (head r)))))
+                    (err ccs (str (cons 'unexpected: ' (cons (head r) ()))))))
                 ((fn (pp)
                 ((fn (tt rr)
                   (pair (cons t tt) rr)
@@ -399,7 +399,7 @@
     (def f (head e))
     (def s (head (tail e)))
 
-    (pair (str f) s)))
+    (pair (str (cons f ())) s)))
 
 (def parse-expr
   (fn (cs rec)
@@ -435,7 +435,7 @@
 (print code newline)
 
 (def is-number (fn (o) (= o (+ 0 o))))
-(def is-string (fn (o) (= o (str o))))
+(def is-string (fn (o) (= o (str (cons o ())))))
 (def is-symbol (fn (o) (= o (symbol (symbol-name o)))))
 (def is-list (fn (o) (if (= o ()) o (tail o))))
 (def is-fn (fn (o) (if o (not (= o o)) o)))
@@ -617,14 +617,14 @@
 (def extract-value      (fn (val label) (extract-with-index val 1 label)))
 (def extract-double     (fn (val label) (c-call LLVMBuildBitCast *
                                          * main-b
-                                         * (extract-value val (str label '-int'))
+                                         * (extract-value val (str (cons label (cons '-int' ()))))
                                          * double-type
-                                         * (str label '-double'))))
+                                         * (str (cons label (cons '-double' ()))))))
 (def extract-pointer    (fn (val type label) (c-call LLVMBuildIntToPtr *
                                               * main-b
-                                              * (extract-value val (str label '-int'))
+                                              * (extract-value val (str (cons label (cons '-int' ()))))
                                               * type
-                                              * (str label '-pointer'))))
+                                              * (str (cons label (cons '-pointer' ()))))))
 
 (def gep-with-index (fn (ptr index label)
                      (c-call LLVMBuildInBoundsGEP *
@@ -785,7 +785,7 @@
 
   (def kind (c-call LLVMGetTypeKind int * c-type))
 
-  (def label (str 'unpack-' (symbol-name type)))
+  (def label (str (cons 'unpack-' (cons (symbol-name type) ()))))
 
   (def get-val (fn () (extract-double val 'value')))
 
@@ -911,7 +911,7 @@
                     * i64-type
                     * 'convert-to-i64')
           int 1
-          * (str 'packed-' (type-index-friendly-name type-id)))))
+          * (str (cons 'packed-' (cons (type-index-friendly-name type-id) ()))))))
 
 (def tr-cast-from-c-type
  (fn (state type val)
@@ -919,7 +919,7 @@
 
   (def kind (c-call LLVMGetTypeKind int * c-type))
 
-  (def label (str 'cast-' (symbol-name type)))
+  (def label (str (cons 'cast-' (cons (symbol-name type) ()))))
 
   (if (= kind LLVMPointerTypeKind)
    (build-val c-pointer-type-index (c-call LLVMBuildPtrToInt * * main-b * val * i64-type * 'ptr-to-int'))
@@ -996,7 +996,7 @@
             * target-fn
             * (c-ptr-array c-casted-args)
             int num-args
-            * (if is-void '' (str 'call-' (symbol-name fn-name)))))
+            * (if is-void '' (str (cons 'call-' (cons (symbol-name fn-name) ()))))))
 
   (if is-void
    (tr-nil state^^)
@@ -1120,7 +1120,7 @@
                         * frame
                         * (c-ptr-array (cons (i64-const 0) (cons (i32-const 1) (cons (i64-const i) ()))))
                         int 3
-                        * (str 'capture-' (symbol-name b) '-addr')))
+                        * (str (cons 'capture-' (cons (symbol-name b) (cons '-addr' ()))))))
               (c-call LLVMBuildStore * * main-b * (state-cur-value st^) * loc)
               st^)))
             state
@@ -1385,7 +1385,7 @@
    int LLVMIntEQ
    * (extract-type-index val 'type-index')
    * type-index
-   * (str 'is-' (type-index-friendly-name type-index)))))
+   * (str (cons 'is-' (cons (type-index-friendly-name type-index) ()))))))
 
 (def tr
   (fn (code)
