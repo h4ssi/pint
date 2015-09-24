@@ -15,6 +15,10 @@
 ; You should have received a copy of the GNU Affero General Public License
 ; along with Foobar.  If not, see <http://www.gnu.org/licenses/>.
 
+(def pr (fn (x) (print (str (cons x ())))))
+(def prln (fn (x) (print (str (cons x (cons '
+' ()))))))
+
 (def c (c-call LLVMGetGlobalContext *))
 (def m (c-call LLVMModuleCreateWithNameInContext * * 'test' * c))
 (def i (c-call LLVMInt32TypeInContext * * c))
@@ -33,13 +37,13 @@
 
 (if (= 0 (c-call LLVMVerifyFunction int * f int LLVMPrintMessageAction))
     nil
-    (print 'error verifying function'))
+    (prln 'error verifying function'))
 
 (def err (c-ref))
 
 (if (= 0 (c-call LLVMVerifyModule int * m int LLVMPrintMessageAction * (c-ref err)))
     nil
-    (print (c-str err)))
+    (prln (c-str err)))
 
 (c-call LLVMDisposeBuilder void * b)
 
@@ -53,16 +57,15 @@
 
 (if (= 0 (c-call LLVMCreateJITCompilerForModule int * (c-ref ee) * m int 0 * (c-ref err)))
     nil
-    (print (c-str err)))
+    (prln (c-str err)))
 
 (def plus (c-call LLVMGetPointerToGlobal * * ee * f))
 
-(print 'calling ' plus)
+(prln (str (cons 'calling ' (cons plus ()))))
 
-(print '3 + 4 = ' (c-call * plus int int 3 int 4))
+(prln (str (cons '3 + 4 = ' (cons (c-call * plus int int 3 int 4) ()))))
 
-(print '
-')
+(prln '')
 
 ; end of poc, start of pint
 
@@ -257,10 +260,10 @@
 
    (getk^ m getk^)))
 
-(print (getk () 'test') newline) ; should be nil
-(def testmap (assoc (assoc (assoc () 'a' 1) 'b' 2) 'a' 3))
-(print (getk testmap 'a') newline) ; should be 3
-(print (getk testmap 'b') newline) ; should be 2
+;(prln (getk () 'test')) ; should be nil
+;(def testmap (assoc (assoc (assoc () 'a' 1) 'b' 2) 'a' 3))
+;(prln (getk testmap 'a')) ; should be 3
+;(prln (getk testmap 'b')) ; should be 2
 
 (def split
  (fn (count list)
@@ -344,7 +347,7 @@
 
     (pair (+ (n dec) (* (n com) (/ (m com)))) rrr)))
     
-(def err (fn (x m) (print m newline) (pair (cons nil ()) x)))
+(def err (fn (x m) (error m) (pair (cons nil ()) x)))
 
 (def parse-list 
   (fn (cs prs)
@@ -432,7 +435,8 @@
 
 (def code (parse-all (to-list INPUT) parse-all))
 
-(print code newline)
+; todo pretty print!
+(prln code)
 
 (def is-number (fn (o) (= o (+ 0 o))))
 (def is-string (fn (o) (= o (str (cons o ())))))
@@ -541,6 +545,12 @@
 (def state-add-local (fn (s key val) (state-unmake s (fn (cv bb pt ba st bs gl)
                                      (state-make cv bb pt ba (assoc st key val) bs gl)))))
 
+(def log (fn (lvl msg) (prln (str (cons '[' (cons lvl (cons '] ' (cons msg ()))))))))
+(def debug (fn (msg) (log 'D' msg)))
+(def info (fn (msg) (log 'I' msg)))
+(def warn (fn (msg) (log 'W' msg)))
+(def error (fn (msg) (log 'E' msg)))
+
 (def state-borrow (fn (s sym)
  (def sb^ (fn (c rec)
   (if (nil? c)
@@ -557,7 +567,7 @@
    s
    (if (or (sb^ ba sb^) (getk gl sym))
     (state-make cv bb pt ba st (reverse (cons sym (reverse bs))) gl)
-    (print '[E] undefined var: ' (symbol-name sym) newline)))))))
+    (error (str (cons 'undefined var: ' (cons (symbol-name sym) ()))))))))))
 
 (def state-borrow-list (fn (s) (state-unmake s (fn (cv bb pt ba st bs gl) bs))))
 
@@ -703,7 +713,7 @@
   (if s^
    (do
     (def index (indexof sym (state-borrow-list s^)))
-    (print '[I] ' (symbol-name sym) ' borrow index: ' index newline)
+    (info (str (cons (symbol-name sym) (cons ' borrow index: ' (cons index ())))))
     (def val-loc (c-call LLVMBuildInBoundsGEP *
                   * main-b
                   * (state-get-local s^ '')
@@ -715,7 +725,7 @@
               * val-loc
               * 'value'))
     (state-set-cur-value (state-add-local s^ sym val) val))
-   (print '[W] ' (symbol-name sym) ' not found!' newline))))
+   (warn (str (cons (symbol-name sym) (cons ' not found!' ())))))))
 
 (def tr-load-from-global
  (fn (sym state)
@@ -724,8 +734,8 @@
      (unpair glb (fn (label val)
       (if (= 'var' label)
       (state-set-cur-value state (c-call LLVMBuildLoad * * main-b * val * 'load_from_var'))
-       (print '[E] expected ' (symbol-name sym) ' to be a variable, actually is ' label newline))))
-    (print '[E] unknown variable ' (symbol-name sym) newline))))
+       (error (str (cons 'expected ' (cons (symbol-name sym) (cons ' to be a variable, actually is ' (cons label ())))))))))
+    (error (str (cons 'unknown variable ' (cons (symbol-name sym) ())))))))
 
 (def tr-load
  (fn (sym state)
@@ -974,7 +984,7 @@
   (def target-fn (unpair entry (fn (label val)
                                 (if (= label 'c-fn')
                                  val
-                                 (print '[E] not a C fn: ' (symbol-name fn-name) newline)))))
+                                 (error (str (cons 'not a C fn: ' (cons (symbol-name fn-name) ()))))))))
 
   (def casts (stap (fn (st typed-arg)
                     (unpair typed-arg
@@ -1018,7 +1028,7 @@
 (def tr-if
  (fn (form state tr)
   (if (not (= (listlen form) 4))
-   (print '[E] expected: if <cond> <then> <else>' newline)
+   (error 'expected: if <cond> <then> <else>')
 
    (uncons (tail form) (fn (cond r)
    (uncons r (fn (then r)
@@ -1095,7 +1105,7 @@
 
 (def gen-fn-frame
  (fn (state f borrowed-vars)
-   (print '[I] assembling closure frame: ' borrowed-vars newline)
+   (info (str (cons 'assembling closure frame: ' (cons borrowed-vars ()))))
    (def borrowed-vars-num (listlen borrowed-vars))
    (def frame-size (+ 8 (* 16 borrowed-vars-num)))
    (def frame-mem (c-call LLVMBuildCall *
@@ -1125,7 +1135,7 @@
               st^)))
             state
             (zip (range borrowed-vars-num) borrowed-vars)))
-   (print '[I] done' newline)
+   (info 'done')
 
    (def func-pointer (c-call LLVMBuildPtrToInt * * main-b * frame * i64-type * 'pack-closure'))
 
@@ -1184,7 +1194,7 @@
                (fn (label var)
                 (if (= 'var' label)
                  var
-                 (print '[E] expected ' (symbol-name name) ' to be a variable, but actually is ' label newline)))))
+                 (error (str (cons 'expected ' (cons (symbol-name name) (cons ' to be a variable, but actually is ' (cons label ()))))))))))
 
   (c-call LLVMBuildStore * * main-b * val * gl-var)
 
@@ -1654,13 +1664,13 @@
 
 (if (= 0 (c-call LLVMVerifyModule int * m int LLVMPrintMessageAction * (c-ref err)))
     nil
-    (print (c-str err) newline))
+    (prln (c-str err)))
 
 (c-call LLVMDisposeBuilder void * main-b)
 
-(print newline)
+(prln '')
 
 (c-call LLVMDumpModule void * m)
 (if (= 0 (c-call LLVMPrintModuleToFile int * m * 'out.ll' * (c-ref err)))
     nil
-    (print (c-str err) newline))
+    (prln (c-str err)))

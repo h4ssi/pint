@@ -1,10 +1,13 @@
 
-(print 'hello world!');
+(print 'hello world!
+');
 (c-call puts int * 'hello world from c puts call!')
 
 (def hello (fn () (print 1)))
 
 (hello)
+(print '
+')
 
 ; do some tests, check exit code
 
@@ -16,6 +19,7 @@
 
 (def newline '
 ')
+(def prfail (fn (m) (print (str (cons '[F] ' (cons m (cons newline ())))))))
 (def test (macro (cond descr)
            (cons (quote do)
            (cons (cons (quote def) (cons (quote num-tests) (cons (cons (quote +) (cons (quote num-tests) (cons 1 ()))) ())))
@@ -24,7 +28,7 @@
              (cons cond
              (cons nil
              (cons (cons (quote do)
-                   (cons (cons (quote print) (cons '[F] ' (cons descr (cons newline ()))))
+                   (cons (cons (quote prfail) (cons descr ()))
                    (cons (cons (quote def) (cons (quote failed-tests) (cons (cons (quote +) (cons (quote failed-tests) (cons 1 ()))) ()))) ()
              ))) ())))) ())))))
 
@@ -55,15 +59,17 @@
 
 (test (= (rec 5 rec) 15) 'recursion works')
 
-(print (fn () 1))
+(def prln (fn (x) (print (str (cons x (cons newline ()))))))
+
+(prln (fn () 1))
 
 (test (= (quote a) (symbol 'a')) 'symbol quoting works')
 (test (= (quote 1337) 1337) 'number quoting works')
 (test (= (quote 'text') 'text') 'text quoting works')
 (test (= (quote (a 1 c)) (cons (symbol 'a') (cons 1 (cons (symbol 'c') ())))) 'list quoting works')
 
-(print 'over \'n out')
-(print '\\./\'\\./\'\\./\'\\')
+(prln 'over \'n out')
+(prln '\\./\'\\./\'\\./\'\\')
 
 (test (= (symbol-name (quote hihi)) 'hihi') 'symbol-name fn works')
 
@@ -87,7 +93,7 @@
 (def dbl 'Na')
 
 (twice (twice (twice (print dbl)))) ; do not print this here (print 'lel')
-(print ' Batman!')
+(prln ' Batman!')
 
 (test (= (str (cons 1 (cons 2 (cons 3 (cons 'a' (cons 'b' (cons 'c' (cons (quote d) (cons (quote e) (cons (quote f) ())))))))))) '123abcdef') 'str concat works')
 (test (= (substr 'asdf') 'asdf') 'substr with string only')
@@ -98,7 +104,7 @@
 (test (= (substr 'asdf' 2 20) 'df') 'substr grep beyond length')
 
 ; todo better tests for c pointers
-(print (c-call strdup * * 'dup this'))
+(prln (c-call strdup * * 'dup this'))
 (test (= (c-str (c-call strdup * * 'hiho')) 'hiho') 'conversion to and from c-str')
 (test (= (c-str (c-val program_invocation_short_name *)) 'hello') 'read global c-var')
 
@@ -163,7 +169,7 @@
 
 (test (= (apply + (cons 1 (cons 2 ()))) 3) 'apply list as args to +')
 
-(print (str (cons 'tests: ' (cons num-tests (cons ' failed: ' (cons failed-tests ()))))))
+(prln (str (cons 'tests: ' (cons num-tests (cons ' failed: ' (cons failed-tests ()))))))
 
 failed-tests
 
