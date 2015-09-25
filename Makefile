@@ -1,3 +1,6 @@
+
+pint_deps = hello pint.pint includer-hack build-pint
+
 all: hello
 
 hello.o: hello.cc
@@ -12,11 +15,8 @@ hello: hello.o extern.o
 llvm-c-poc: llvm-c-poc.c
 	clang++ llvm-c-poc.c $(shell llvm-config --cflags --ldflags --system-libs --libs) -o llvm-c-poc
 
-out.ll: hello pint.pint helloworld.pint
-	./hello pint.pint helloworld.pint
-
-helloworld: out.ll
-	clang out.ll -o helloworld
+helloworld: helloworld.pint $(pint_deps)
+	echo -n helloworld | ./build-pint | cat
 
 includer-hack.ll: includer-hack.pint hello pint.pint
 	./hello pint.pint includer-hack.pint
@@ -28,8 +28,18 @@ includer-hack.s: includer-hack.ll
 includer-hack: includer-hack.s
 	clang includer-hack.s -o includer-hack
 
+build-pint.ll: build-pint.pint includer-hack hello pint.pint
+	echo -n build-pint.pint | ./includer-hack | ./hello pint.pint -
+	mv out.ll build-pint.ll
+
+build-pint.s: build-pint.ll
+	llc build-pint.ll
+
+build-pint: build-pint.s
+	clang build-pint.s -o build-pint
+
 clean:
-	rm -f hello hello.o extern.o llvm-c-poc out.ll helloworld includer-hack{,.s,.ll}
+	rm -f hello hello.o extern.o llvm-c-poc helloworld{,.s,.ll} includer-hack{,.s,.ll} build-pint{,.s,.ll}
 
 .PHONY: all clean
 

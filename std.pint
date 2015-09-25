@@ -1,0 +1,4 @@
+
+(def nil (head ()))
+(def c-nil (c-call strstr * * '' * '?'))
+
