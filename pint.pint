@@ -1631,7 +1631,15 @@
 
       nil)))))
 
-    (def s s-ident)
+    (def s-c-str
+     (built-in-fn s-ident (quote c-str) 1 (fn (args) (uncons args (fn (v _)
+      (c-call LLVMBuildRet *
+       * main-b
+       * (build-val string-type-index (extract-value v 'str-data-ptr')))
+
+      nil)))))
+
+    (def s s-c-str)
 
     (def tr^ (fn (c state rec)
       (if (empty? c)
