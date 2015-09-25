@@ -18,8 +18,18 @@ out.ll: hello pint.pint helloworld.pint
 helloworld: out.ll
 	clang out.ll -o helloworld
 
+includer-hack.ll: includer-hack.pint hello pint.pint
+	./hello pint.pint includer-hack.pint
+	mv out.ll includer-hack.ll
+
+includer-hack.s: includer-hack.ll
+	llc includer-hack.ll
+
+includer-hack: includer-hack.s
+	clang includer-hack.s -o includer-hack
+
 clean:
-	rm -f hello hello.o extern.o llvm-c-poc out.ll helloworld
+	rm -f hello hello.o extern.o llvm-c-poc out.ll helloworld includer-hack{,.s,.ll}
 
 .PHONY: all clean
 
