@@ -964,8 +964,22 @@
 
   (c-call LLVMAddFunction * * m * (symbol-name name) * fn-t)))
 
+(def tr-declare-c-var
+ (fn (name)
+  (debug (str (cons 'declaring glb var: ' (cons (symbol-name name) ()))))
+  (c-call LLVMAddGlobal * * m * pointer-type * (symbol-name name))))
+
+(def state-add-global-tagged (fn (state key tag thing)
+ (state-add-global state key (pair tag thing))))
+
+(def c-fn-tag 'c-fn')
+(def c-var-tag 'c-var')
+
 (def state-add-global-fn (fn (state fn-name ret-type arg-types)
- (state-add-global state fn-name (pair 'c-fn' (tr-declare-c-fn fn-name ret-type arg-types)))))
+ (state-add-global-tagged state fn-name c-fn-tag (tr-declare-c-fn fn-name ret-type arg-types))))
+
+(def state-add-global-var (fn (state var-name)
+ (state-add-global-tagged state var-name c-var-tag (tr-declare-c-var var-name))))
 
 (def tr-c-call
  (fn (form state tr)
@@ -982,7 +996,7 @@
   (def entry (state-get-global state^ fn-name))
 
   (def target-fn (unpair entry (fn (label val)
-                                (if (= label 'c-fn')
+                                (if (= label c-fn-tag)
                                  val
                                  (error (str (cons 'not a C fn: ' (cons (symbol-name fn-name) ()))))))))
 
@@ -1012,6 +1026,35 @@
    (tr-nil state^^)
    (state-set-cur-value state^^
     (tr-cast-from-c-type state^^ ret-type res)))))
+
+(def tr-c-val-ref
+ (fn (form state tr)
+
+  ; todo check num args
+  (def val-name (head (tail form)))
+
+  (def state^
+   (if (state-get-global state val-name)
+    state
+    (state-add-global-var state val-name)))
+
+  (def entry (state-get-global state^ val-name))
+
+  (def target-val (unpair entry (fn (label val)
+                                 (if (= label c-var-tag)
+                                  val
+                                  (error (str (cons 'not a C var: ' (cons (symbol-name val-name) ()))))))))
+
+  (def c-ptr-val (build-val
+                  c-pointer-type-index
+                  (c-call LLVMBuildPtrToInt *
+                   * main-b
+                   * target-val
+                   * i64-type
+                   * 'ptr-as-i64')))
+
+  (state-set-cur-value state^ c-ptr-val)))
+
 
 ; LLVMIntPredicate
 (def LLVMIntEQ 32)  ; equal
@@ -1371,6 +1414,9 @@
    (if (= (symbol 'c-call') (head form))
      (tr-c-call form state tr)
 
+   (if (= (symbol 'c-val-ref') (head form))
+     (tr-c-val-ref form state tr)
+
    (if (= (symbol 'c-array') (head form))
      (tr-c-array form state tr)
 
@@ -1386,7 +1432,7 @@
    (if (= (symbol 'fn') (head form))
      (tr-fn form state tr)
 
-   (tr-call form state tr)))))))))))
+   (tr-call form state tr))))))))))))
 
 (def tr-type-test
  (fn (type-index val)
