@@ -1028,7 +1028,7 @@ int main(int argc, char **argv) {
 
   std::ostringstream str;
 
-  if (argc >= 2) {
+  if (argc >= 2 && std::string("-") != argv[1]) {
     str << std::ifstream(argv[1]).rdbuf();
   } else {
     str << std::cin.rdbuf();
