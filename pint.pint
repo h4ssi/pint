@@ -476,7 +476,7 @@
 
 (def void-type (c-call LLVMVoidTypeInContext * * c))
 
-(def main-f-type (c-call LLVMFunctionType * * void-type * (c-ptr-array ()) int 0 int 0))
+(def main-f-type (c-call LLVMFunctionType * * i32-type * (c-ptr-array ()) int 0 int 0))
 (def main-f (c-call LLVMAddFunction * * m * 'main' * main-f-type))
 (def main-bb (c-call LLVMAppendBasicBlockInContext * * c * main-f * 'entry'))
 (def main-b (c-call LLVMCreateBuilder *))
@@ -1704,11 +1704,26 @@
          (rec t state rec)
        ) (head c) (tail c)))))
 
-    (tr^ code s tr^)))
+    (def exit-code (state-cur-value (tr^ code s tr^)))
+
+    (c-call LLVMBuildRet *
+     * main-b
+     * (c-call LLVMBuildSelect *
+        * main-b
+        * (tr-type-test number-type-index exit-code)
+        * (c-call LLVMBuildFPToSI *
+           * main-b
+           * (extract-double exit-code 'exit-code-double')
+           * i32-type
+           * 'exit-code-i32')
+        * (c-call LLVMBuildTrunc *
+           * main-b
+           * (extract-value exit-code 'exit-code-i64')
+           * i32-type
+           * 'exit-code-i32')
+        * 'exit-code'))))
 
 (tr code)
-
-(c-call LLVMBuildRetVoid * * main-b)
 
 (def LLVMAbortProcessAction 0)
 (def LLVMPrintMessageAction 1)
