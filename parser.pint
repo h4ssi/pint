@@ -1,22 +1,4 @@
 
-(def to-list
-  (fn (string)
-
-    (def to-list^
-      (fn (pos rec)
-        ((fn (c) (if (= c '') () (cons c (rec (+ pos 1) rec))))
-         (substr string pos 1))))
-
-    (to-list^ 0 to-list^)))
-
-(def in-str
-  (fn (c string) (in-list c (to-list string))))
-
-(def strlen
-  (fn (s) (listlen (to-list s))))
-
-; move above to std once substr replacement is defined
-
 (def OP '(') ; ) (
 (def CP ')')
 

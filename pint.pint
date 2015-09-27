@@ -310,7 +310,7 @@
    (c-call LLVMConstStringInContext * 
     * c
     * string
-    int (+ (strlen string) 1)
+    int (+ (str-length string) 1)
     int 1)) ; do not zero terminate
  (def strmem
    (c-call LLVMAddGlobal *
@@ -596,7 +596,7 @@
   (def ret-c-type (tr-c-type ret-type))
 
   (def c-typed-args (map (fn (type) (tr-c-type type)) arg-types))
-  (def num-args (listlen c-typed-args))
+  (def num-args (list-length c-typed-args))
   
   (def arg-t-array (c-ptr-array c-typed-args))
   (def fn-t (c-call LLVMFunctionType * * ret-c-type * arg-t-array int num-args int 0))
@@ -651,7 +651,7 @@
   (def state^^ (fst casts))
   (def c-casted-args (reverse (snd casts)))
 
-  (def num-args (listlen c-casted-args))
+  (def num-args (list-length c-casted-args))
 
   (def is-void (= (symbol 'void') ret-type))
   (def res (c-call LLVMBuildCall *
@@ -709,7 +709,7 @@
 
 (def tr-if
  (fn (form state tr)
-  (if (not (= (listlen form) 4))
+  (if (not (= (list-length form) 4))
    (error 'expected: if <cond> <then> <else>')
 
    (uncons (tail form) (fn (cond r)
@@ -788,7 +788,7 @@
 (def gen-fn-frame
  (fn (state f borrowed-vars)
    (info (str (cons 'assembling closure frame: ' (cons borrowed-vars ()))))
-   (def borrowed-vars-num (listlen borrowed-vars))
+   (def borrowed-vars-num (list-length borrowed-vars))
    (def frame-size (+ 8 (* 16 borrowed-vars-num)))
    (def frame-mem (c-call LLVMBuildCall *
                    * main-b
@@ -828,7 +828,7 @@
   ; todo check length ok
 
   (uncons (tail form) (fn (args body)
-   (def num-args (listlen args))
+   (def num-args (list-length args))
 
    (unpair
     (gen-fn num-args
@@ -914,7 +914,7 @@
   (def state^ (fst args-state))
   (def arg-states (reverse (snd args-state)))
 
-  (def num-args (listlen arg-states))
+  (def num-args (list-length arg-states))
 
   (def f-type (get-fn-type num-args))
   (def f-ptr-type (c-call LLVMPointerType * * f-type int 0))
