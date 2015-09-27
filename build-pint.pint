@@ -15,9 +15,21 @@
 (def target-ll (join target '.ll'))
 (def target-s (join target '.s'))
 
-(def sys (fn (cmd) (c-call system int * cmd)))
+(def sys (fn (cmd)
+ (c-call puts int * cmd)
+ (c-call system int * cmd)))
 
-(def h (sys (join 'echo -n ' (join target-pint ' | ./includer-hack | ./hello pint.pint -'))))
+(def tmp-pint (c-call strdup * * (c-call tmpnam * * nil)))
+(sys (join 'echo -n pint.pint | ./includer-hack > ' tmp-pint))
+
+(def tmp-source (c-call strdup * * (c-call tmpnam * * nil)))
+(sys (join 'echo -n ' (join target-pint (join ' | ./includer-hack > ' tmp-source))))
+
+(def h (sys (join './hello ' (join tmp-pint (join ' ' tmp-source)))))
+
+(c-call remove int * tmp-source)
+(c-call remove int * tmp-pint)
+
 (if (p/ident h 0)
  ((fn ()
    (def m (sys (join 'mv out.ll ' target-ll)))

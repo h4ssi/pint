@@ -1,5 +1,5 @@
-
-pint_deps = hello pint.pint includer-hack build-pint
+SHELL = /bin/bash
+pint_deps = hello pint.pint std.pint parser.pint includer-hack build-pint
 
 all: hello
 
@@ -16,10 +16,11 @@ llvm-c-poc: llvm-c-poc.c
 	clang++ llvm-c-poc.c $(shell llvm-config --cflags --ldflags --system-libs --libs) -o llvm-c-poc
 
 helloworld: helloworld.pint $(pint_deps)
-	echo -n helloworld | ./build-pint | cat
+	echo -n helloworld | ./build-pint
 
-includer-hack.ll: includer-hack.pint hello pint.pint
-	./hello pint.pint includer-hack.pint
+# special bootstrap for includer hack
+includer-hack.ll: includer-hack.pint hello pint.pint std.pint parser.pint
+	./hello <(cat std.pint parser.pint pint.pint | grep -v '(include ') includer-hack.pint
 	mv out.ll includer-hack.ll
 
 includer-hack.s: includer-hack.ll
@@ -28,8 +29,8 @@ includer-hack.s: includer-hack.ll
 includer-hack: includer-hack.s
 	clang includer-hack.s -o includer-hack
 
-build-pint.ll: build-pint.pint includer-hack hello pint.pint
-	echo -n build-pint.pint | ./includer-hack | ./hello pint.pint -
+build-pint.ll: build-pint.pint includer-hack hello pint.pint std.pint parser.pint
+	./hello <(echo -n pint.pint | ./includer-hack) <(echo -n build-pint.pint | ./includer-hack)
 	mv out.ll build-pint.ll
 
 build-pint.s: build-pint.ll

@@ -2,3 +2,260 @@
 (def nil (head ()))
 (def c-nil (c-call strstr * * '' * '?'))
 
+(def nil? (fn (w) (if w nil '')))
+(def not  (fn (c) (if c nil '')))
+
+(def and (fn (a b) (if a b a)))
+(def or (fn (a b) (if a a b)))
+
+(def empty? (fn (l) (if (tail l) nil l)))
+
+; provide replacements for interpreter built ins
+
+(def impls (fn (interpreted compiled) (if p/ident compiled interpreted)))
+
+; care: until this fns are actually defined, they may only be used in interpreter impls
+(def =)
+(def str)
+
+(def dyn-type-test (fn (val type-index) (p/ident (p/type val) type-index)))
+
+(def is-number
+ (impls
+  (fn (o) (= o (+ 0 o)))
+  (fn (o) (dyn-type-test o 1))))
+
+(def is-string
+ (impls
+  (fn (o) (= o (str (cons o))))
+  (fn (o) (dyn-type-test o 2))))
+
+(def is-list
+ (impls
+  (fn (o) (if (= o ()) o (tail o)))
+  (fn (o) (dyn-type-test o 3))))
+
+(def is-fn
+ (impls
+  (fn (o) (if o (not (= o o)) o))
+  (fn (o) (dyn-type-test o 4))))
+
+(def = (impls = (fn (a b)
+ (def =^ (fn (a b rec)
+  (if a
+   (if (is-fn a)
+    nil ; fns are never eq
+    (if (p/ident a b)
+     a
+     (if (is-string a)
+      (if (is-string b)
+       (p/ident 0 (c-call strcmp int * a * b))
+       nil) ; a string, b is not
+      (if (is-list a)
+       (if (is-list b)
+        (if (empty? a)
+         (empty? b)
+         (if (rec (head a) (head b) rec)
+          (rec (tail a) (tail b) rec)
+          nil)) ; heads diff
+        nil) ; a list, b is not
+       nil)))) ; default
+  nil))) ; a is nil
+
+ (=^ a b =^))))
+
+
+; interpreter built in replacments end
+
+(def pair
+  (fn (l r)
+    (cons l (cons r ()))))
+
+(def unpair
+ (fn (p f)
+  (f (head p) (head (tail p)))))
+
+(def fst (fn (p) (unpair p (fn (f s) f))))
+(def snd (fn (p) (unpair p (fn (f s) s))))
+
+(def uncons
+ (fn (l f)
+  (f (head l) (tail l))))
+
+(def range
+ (fn (l)
+  (def range^
+   (fn (r i i1 rec)
+    (if (= i 0)
+     r
+     (rec (cons i1 r) i1 (+ i1 (- 1)) rec))))
+
+  (range^ () l (+ l (- 1)) range^)))
+
+(def reduce
+  (fn (f i l)
+    (def reduce^
+      (fn (res ll rec)
+        (if (empty? ll)
+          res
+          (f (rec res (tail ll) rec) (head ll)))))
+
+    (reduce^ i l reduce^)))
+
+(def leduce
+  (fn (f i l)
+    (def leduce^
+      (fn (res ll rec)
+        (if (empty? ll)
+          res
+          (rec (f res (head ll)) (tail ll) rec))))
+
+    (leduce^ i l leduce^)))
+
+(def listlen
+  (fn (l)
+    (leduce (fn (res i) (+ 1 res)) 0 l)))
+
+(def reverse
+  (fn (l)
+    (leduce (fn (res i) (cons i res)) () l)))
+
+(def filter
+  (fn (p l)
+    (reduce
+      (fn (res i)
+        (if (p i) (cons i res) res))
+      ()
+      l)))
+
+(def map
+  (fn (t l)
+    (reduce
+      (fn (res e)
+        (cons (t e) res))
+      ()
+      l)))
+
+(def stap
+  (fn (t i l)
+    (reduce
+      (fn (st-res e) (unpair st-res (fn (st res) (unpair (t st e) (fn (st^ e^)
+       (pair st^ (cons e^ res)))))))
+      (pair i ())
+      l)))
+
+(def zip
+ (fn (l r)
+  (def zip^ (fn (ll rr rec)
+             (if (empty? ll) ()
+             (if (empty? rr) ()
+             (uncons ll (fn (l-h l-t)
+             (uncons rr (fn (r-h r-t)
+             (cons (pair l-h r-h) (rec l-t r-t rec))))))))))
+  (zip^ l r zip^)))
+
+(def in-list
+  (fn (e l)
+    (not (empty? (filter (fn (i) (= i e)) l)))))
+
+(def indexof (fn (el li)
+ (def indexof^ (fn (l i rec)
+  (if (empty? l)
+   nil
+   (uncons l (fn (h t)
+    (if (= el h)
+     i
+     (rec t (+ i 1) rec)))))))
+ (indexof^ li 0 indexof^)))
+
+(def drop-while
+  (fn (p l)
+
+    (def drop-while^
+      (fn (ll rec)
+        (if (empty? ll)
+          ll
+          (if (p (head ll))
+            (rec (tail ll) rec)
+            ll))))
+
+    (drop-while^ l drop-while^)))
+
+(def take-while
+  (fn (p l)
+
+    (def take-while^
+      (fn (ll rec)
+        (if (empty? ll)
+          ll
+          (if (p (head ll))
+            (cons (head ll) (rec (tail ll) rec))
+            ()))))
+
+    (take-while^ l take-while^)))
+
+(def concat (fn (l r) (reduce (fn (ls el) (cons el ls)) r l)))
+
+(def assoc
+ (fn (m k v)
+  (cons k (cons v m))))
+
+(def assocall (fn (m new-m) (concat new-m m)))
+
+(def getk
+ (fn (m k)
+   (def getk^
+     (fn (mm rec)
+       (if (empty? mm)
+         nil
+         (if (= k (head mm))
+            (head (tail mm))
+            (rec (tail (tail mm)) rec)))))
+
+   (getk^ m getk^)))
+
+;(prln (getk () 'test')) ; should be nil
+;(def testmap (assoc (assoc (assoc () 'a' 1) 'b' 2) 'a' 3))
+;(prln (getk testmap 'a')) ; should be 3
+;(prln (getk testmap 'b')) ; should be 2
+
+(def split
+ (fn (count list)
+
+  (def split^
+   (fn (list i rec)
+    (if (= i count)
+     (pair () list)
+     (if (empty? list)
+      (pair () nil)
+      (unpair (rec (tail list) (+ i 1) rec)
+       (fn (h t)
+        (pair (cons (head list) h) t)))))))
+
+  (split^ list 0 split^)))
+
+(def take
+ (fn (count list)
+  (unpair (split count list)
+   (fn (h t) h))))
+
+(def drop
+ (fn (count list)
+  (unpair (split count list)
+   (fn (h t) t))))
+
+(def chunk
+ (fn (chunk-size list)
+  (def chunk^
+   (fn (list rec)
+    (unpair (split 2 list)
+     (fn (h t)
+      (if (nil? t)
+       (pair () h)
+       (if (empty? t)
+        (pair (cons h ()) nil)
+        (unpair (rec t rec)
+         (fn (hh tt)
+          (pair (cons h hh) tt)))))))))
+  (chunk^ list chunk^)))
+
