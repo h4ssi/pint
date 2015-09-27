@@ -9,7 +9,7 @@
 (def slurp-fp (fn (fp)
  (def s (c-call malloc * int max-len))
  (def read-bytes (c-call fread int * s int 1 int max-len * fp))
- (c-array-set char read-bytes s 0)
+ (c-set char (c-array-addr char read-bytes s) 0)
  (c-str s)))
 
 (def slurp (fn (filename)
@@ -24,10 +24,10 @@
   ; ( to not confuse vim :>
   (def end-of-form (c-call strstr * * match * ')'))
 
-  (def prev (c-array-get char 0 end-of-form))
-  (c-array-set char 0 end-of-form 0)
+  (def prev (c-get char (c-array-addr char 0 end-of-form)))
+  (c-set char (c-array-addr char 0 end-of-form) 0)
   (def copy (c-call strdup * * match))
-  (c-array-set char 0 end-of-form prev)
+  (c-set char (c-array-addr char 0 end-of-form) prev)
 
   (def tok1 (c-call strtok * * copy * ' '))
   (def tok2 (c-call strtok * * nil * ' '))
@@ -45,16 +45,16 @@
 
   (def target (c-call malloc * uint len))
 
-  (def prev (c-array-get char 0 match))
-  (c-array-set char 0 match 0)
+  (def prev (c-get char (c-array-addr char 0 match)))
+  (c-set char (c-array-addr char 0 match) 0)
   (c-call strcpy * * target * parent)
   (c-call strcat * * target * inner)
-  (c-array-set char 0 match prev)
+  (c-set char (c-array-addr char 0 match) prev)
 
   ; ( to not confuse vim :>
   (def rest (c-call strstr * * match * ')'))
 
-  (c-array-set char 0 rest 10)
+  (c-set char (c-array-addr char 0 rest) 10)
 
   (c-call strcat * * target * rest)))
 
@@ -67,6 +67,6 @@
 
  (t^ source t^)))
 
-(def filename (slurp-fp (c-array-get * 0 (c-val-ref stdin))))
+(def filename (slurp-fp (c-get * (c-array-addr * 0 (c-val-ref stdin)))))
 (prln (transform (slurp filename)))
 

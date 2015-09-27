@@ -3,7 +3,7 @@
  (def max-len 1000000000)
  (def s (c-call malloc * int max-len))
  (def read-bytes (c-call fread int * s int 1 int max-len * fp))
- (c-array-set char read-bytes s 0)
+ (c-set char (c-array-addr char read-bytes s) 0)
  (c-str s)))
 
 (def slurp (fn (filename)
@@ -13,5 +13,5 @@
  (c-call fclose int * fp)
  content))
 
-(def slurp-stdin (fn () (slurp-fp (c-array-get * 0 (c-val-ref stdin)))))
+(def slurp-stdin (fn () (slurp-fp (c-get * (c-array-addr * 0 (c-val-ref stdin))))))
 
