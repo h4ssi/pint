@@ -229,23 +229,6 @@
 (def i32-const (fn (i) (c-call LLVMConstInt * * i32-type int i int 1)))
 (def i64-const (fn (i) (c-call LLVMConstInt * * i64-type int i int 1)))
 
-(def size-of-i64
- (fn (t n)
-  (c-call LLVMBuildPtrToInt *
-   * main-b
-   * (c-call LLVMBuildGEP *
-      * main-b
-      * (c-call LLVMConstNull * * (c-call LLVMPointerType * * t int 0))
-      * (c-ptr-array (cons (i64-const n) ()))
-      int 1
-      * 'size-of-ptr')
-   * i64-type
-   * 'size-of-i64')))
-
-(def size-of-i32
- (fn (t n)
-  (c-call LLVMBuildTrunc * * main-b * (size-of-i64 t n) * i32-type * 'size-of-i32')))
-
 (def nil-type-index (i64-const 0)) ; type 0 = nil
 (def number-type-index (i64-const 1)) ; type 1 = number
 (def string-type-index (i64-const 2)) ; type 2 = string
@@ -274,6 +257,28 @@
                                               * (extract-value val (str (cons label (cons '-int' ()))))
                                               * type
                                               * (str (cons label (cons '-pointer' ()))))))
+
+(def size-of-i64
+ (fn (t n)
+  (c-call LLVMBuildPtrToInt *
+   * main-b
+   * (c-call LLVMBuildGEP *
+      * main-b
+      * (c-call LLVMConstNull * * (c-call LLVMPointerType * * t int 0))
+      * (c-ptr-array (cons (c-call LLVMBuildFPToUI *
+                            * main-b
+                            * (extract-double n 'len-dbl')
+                            * i64-type
+                            * 'len-i64')
+                           ()))
+      int 1
+      * 'size-of-ptr')
+   * i64-type
+   * 'size-of-i64')))
+
+(def size-of-i32
+ (fn (t n)
+  (c-call LLVMBuildTrunc * * main-b * (size-of-i64 t n) * i32-type * 'size-of-i32')))
 
 (def gep-with-index (fn (ptr index label)
                      (c-call LLVMBuildInBoundsGEP *
@@ -959,10 +964,12 @@
 
    (def c-type (tr-c-type type))
 
+   (def len (tr (cons num ()) state tr))
+
    (def array-mem (c-call LLVMBuildCall *
                    * main-b
                    * (snd (state-get-global state (quote malloc)))
-                   * (c-ptr-array (cons (size-of-i32 c-type num) ()))
+                   * (c-ptr-array (cons (size-of-i32 c-type (state-cur-value len)) ()))
                    int 1
                    * 'alloc-array'))
 
@@ -972,7 +979,7 @@
                     * i64-type
                     * 'array-addr'))
 
-   (state-set-cur-value state (build-val c-pointer-type-index array-addr))))))))
+   (state-set-cur-value len (build-val c-pointer-type-index array-addr))))))))
 
 (def tr-c-array-addr
  (fn (form state tr)
