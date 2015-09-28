@@ -1,7 +1,7 @@
 
 (def slurp-fp (fn (fp)
  (def max-len 1000000000)
- (def s (c-call malloc * int max-len))
+ (def s (c-array char max-len))
  (def read-bytes (c-call fread int * s int 1 int max-len * fp))
  (c-set char (c-array-addr char read-bytes s) 0)
  (c-str s)))

@@ -67,15 +67,9 @@
 (def substr)
 
 (def substr (impls substr (fn (string start len)
- (def target (c-call malloc * uint (+ len 1)))
-
  (def s-ptr (c-call memset * * string int 0 uint 0)) ; convert to ptr
 
- (c-call strncpy * * target * (c-array-addr char start s-ptr) uint len)
-
- (c-set char (c-array-addr char len target) 0)
-
- (c-str target))))
+ (c-str (c-call strndup * * (c-array-addr char start s-ptr) uint len)))))
 
 ; interpreter built in replacments end
 

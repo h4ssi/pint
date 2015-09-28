@@ -5,7 +5,7 @@
 (def join (fn (f s)
  (def len (+ 1 (+ (c-call strlen uint * f) (c-call strlen uint * s))))
 
- (def t (c-call malloc * uint len))
+ (def t (c-array char len))
 
  (c-call strcpy * * t * f)
  (c-call strcat * * t * s)))

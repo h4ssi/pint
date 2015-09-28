@@ -7,7 +7,7 @@
 (def prln (fn (x) (c-call puts int * x)))
 
 (def slurp-fp (fn (fp)
- (def s (c-call malloc * int max-len))
+ (def s (c-array char max-len))
  (def read-bytes (c-call fread int * s int 1 int max-len * fp))
  (c-set char (c-array-addr char read-bytes s) 0)
  (c-str s)))
@@ -43,7 +43,7 @@
 
   (def len (+ len-p len-i)) ; a little bit overkill, because (include ...) gets replaced
 
-  (def target (c-call malloc * uint len))
+  (def target (c-array char len))
 
   (def prev (c-get char (c-array-addr char 0 match)))
   (c-set char (c-array-addr char 0 match) 0)
