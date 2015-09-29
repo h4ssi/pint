@@ -10,10 +10,10 @@ extern.o: extern.cc
 	clang++ -std=c++14 -c extern.cc $(shell llvm-config --cflags)
 
 hello: hello.o extern.o
-	clang++ -rdynamic $(shell llvm-config --ldflags) -Wl,--whole-archive -ldl $(shell pkg-config libffi --libs) $(shell llvm-config --system-libs --libs) -Wl,--no-whole-archive hello.o extern.o -o hello
+	clang++ -rdynamic $(shell llvm-config --ldflags) -Wl,--whole-archive -ldl $(shell pkg-config libffi --libs) $(shell llvm-config --system-libs --libs engine) -Wl,--no-whole-archive hello.o extern.o -o hello
 
 llvm-c-poc: llvm-c-poc.c
-	clang++ llvm-c-poc.c $(shell llvm-config --cflags --ldflags --system-libs --libs) -o llvm-c-poc
+	clang++ llvm-c-poc.c $(shell llvm-config --cflags --ldflags --system-libs --libs engine) -o llvm-c-poc
 
 helloworld: helloworld.pint $(pint_deps)
 	echo -n helloworld | ./build-pint
