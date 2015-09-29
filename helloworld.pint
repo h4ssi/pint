@@ -1,24 +1,23 @@
 (include std)
+(include io)
 
 (def newline '
 ')
 
-(def pr (fn (s) (c-call printf int * '%s' * s)))
+(print (if (= 1 1) 'hel' ''))
 
-(pr (if (= 1 1) 'hel' ''))
+(print (if (= 1 2) 'NOPE' ''))
 
-(pr (if (= 1 2) 'NOPE' ''))
+(print (if (= '1' '1') 'lo ' ''))
 
-(pr (if (= '1' '1') 'lo ' ''))
+(print (if (= '1' '2') 'NOPE' ''))
 
-(pr (if (= '1' '2') 'NOPE' ''))
+(print (if (= (cons 1 (cons 1 ())) (cons 1 (cons 1 ()))) 'wor' ''))
 
-(pr (if (= (cons 1 (cons 1 ())) (cons 1 (cons 1 ()))) 'wor' ''))
+(print (if (= (cons 1 (cons 2 ())) (cons 1 (cons 1 ()))) 'NOPE' ''))
 
-(pr (if (= (cons 1 (cons 2 ())) (cons 1 (cons 1 ()))) 'NOPE' ''))
+(print (if (= print print) '' 'ld!'))
 
-(pr (if (= pr pr) '' 'ld!'))
+(print (if (= print empty?) 'NOPE' ''))
 
-(pr (if (= pr empty?) 'NOPE' ''))
-
-(pr newline)
+(print newline)

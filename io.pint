@@ -15,3 +15,6 @@
 
 (def slurp-stdin (fn () (slurp-fp (c-get * (c-array-addr * 0 (c-val-ref stdin))))))
 
+; todo remove polyfill once self hosting
+(def print)
+(def print (if p/ident (fn (msg) (c-call fputs int * msg * (c-get * (c-array-addr * 0 (c-val-ref stdout))))) print))

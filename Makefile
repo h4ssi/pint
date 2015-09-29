@@ -1,5 +1,5 @@
 SHELL = /bin/bash
-pint_deps = hello pint.pint std.pint parser.pint includer-hack build-pint
+pint_deps = hello pint.pint std.pint parser.pint io.pint includer-hack build-pint
 
 all: hello
 
@@ -19,8 +19,8 @@ helloworld: helloworld.pint $(pint_deps)
 	echo -n helloworld | ./build-pint
 
 # special bootstrap for includer hack
-includer-hack.ll: includer-hack.pint hello pint.pint std.pint parser.pint
-	./hello <(cat std.pint parser.pint pint.pint | grep -v '(include ') includer-hack.pint
+includer-hack.ll: includer-hack.pint hello pint.pint std.pint io.pint parser.pint
+	./hello <(cat io.pint std.pint parser.pint pint.pint | grep -v '(include ') includer-hack.pint
 	mv out.ll includer-hack.ll
 
 includer-hack.s: includer-hack.ll
@@ -29,7 +29,7 @@ includer-hack.s: includer-hack.ll
 includer-hack: includer-hack.s
 	clang includer-hack.s -o includer-hack
 
-build-pint.ll: build-pint.pint includer-hack hello pint.pint std.pint parser.pint
+build-pint.ll: build-pint.pint includer-hack hello pint.pint std.pint io.pint parser.pint
 	./hello <(echo -n pint.pint | ./includer-hack) <(echo -n build-pint.pint | ./includer-hack)
 	mv out.ll build-pint.ll
 
