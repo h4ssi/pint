@@ -1061,6 +1061,10 @@
    ptr
    (tr-cast-from-c-type ptr type val))))))))
 
+(def tr-do
+ (fn (form state tr)
+  (tr (tail form) state tr)))
+
 (def tr-form
  (fn (form state tr)
    (if (empty? form)
@@ -1093,7 +1097,10 @@
    (if (= (symbol 'fn') (head form))
      (tr-fn form state tr)
 
-   (tr-call form state tr)))))))))))))
+   (if (= (symbol 'do') (head form))
+     (tr-do form state tr)
+
+   (tr-call form state tr))))))))))))))
 
 (def tr-type-test
  (fn (type-index val)
