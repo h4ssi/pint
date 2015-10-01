@@ -1110,7 +1110,10 @@
    (if (= (symbol 'do') (head form))
      (tr-do form state tr)
 
-   (tr-call form state tr))))))))))))))
+   (if (= (symbol 'quote') (head form))
+     (tr (cons (quote-fn (head (tail form))) ()) state tr)
+
+   (tr-call form state tr)))))))))))))))
 
 (def tr-type-test
  (fn (type-index val)

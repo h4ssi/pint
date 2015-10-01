@@ -286,3 +286,15 @@
 (def str-length
   (fn (s) (list-length (to-list s))))
 
+(def quote-fn
+ (fn (expr) ; this should be a macro, for now its call is hard coded in the reader
+
+  (def quote^ (fn (e rec)
+   (if (is-symbol e)
+    (cons (symbol 'symbol') (cons (symbol-name e) ()))
+   (if (is-list e)
+    (reduce (fn (l i) (cons (symbol 'cons') (cons (rec i rec) (cons l ())))) () e)
+    e))))
+
+  (quote^ expr quote^)))
+
