@@ -16,6 +16,19 @@
 ; along with Foobar.  If not, see <http://www.gnu.org/licenses/>.
 
 (include io)
+(include std)
+
+(def c-ptr-array)
+(def c-ptr-array (if p/ident
+ (fn (ptr-list)
+  (def l (list-length ptr-list))
+  (def array (c-array * l))
+  (map
+   (fn (p) (unpair p (fn (i ptr)
+    (c-set * (c-array-addr * i array) ptr))))
+   (zip (range l) ptr-list))
+  array)
+ c-ptr-array))
 
 (def pr (fn (x) (print (str (cons x ())))))
 (def prln (fn (x) (print (str (cons x (cons '
@@ -70,8 +83,6 @@
 (prln '')
 
 ; end of poc, start of pint
-
-(include std)
 
 (def log (fn (lvl msg) (prln (str (cons '[' (cons lvl (cons '] ' (cons msg ()))))))))
 (def debug (fn (msg) (log 'D' msg)))
