@@ -1063,7 +1063,7 @@
    * (state-cur-value casted-val)
    * addr)
 
-  casted-val))))))))
+  (state-set-cur-value casted-val (state-cur-value val))))))))))
 
 (def tr-c-get
  (fn (form state tr)
