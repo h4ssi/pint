@@ -74,6 +74,9 @@
 (include std)
 (include parser)
 
+(def INPUT)
+(def INPUT (if p/ident (slurp-stdin) INPUT))
+
 (def code (parse INPUT))
 
 ; todo pretty print!
