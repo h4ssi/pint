@@ -79,9 +79,6 @@
 ; todo pretty print!
 (prln code)
 
-; move this to std once symbols are implemented in compiler
-(def is-symbol (fn (o) (= o (symbol (symbol-name o)))))
-
 (def c (c-call LLVMGetGlobalContext *))
 (def m (c-call LLVMModuleCreateWithNameInContext * * 'real' * c))
 
@@ -1358,15 +1355,30 @@
 
       nil)))))
 
+    (def direct-change-type-body
+     (fn (from-type-index to-type-index)
+      (fn (args) (uncons args (fn (v _)
+       (c-call LLVMBuildRet *
+        * main-b
+        * (c-call LLVMBuildSelect *
+           * main-b
+           * (tr-type-test from-type-index v)
+           * (build-val to-type-index (extract-value v 'data'))
+           * (state-cur-value (tr-nil s-ident))
+           * 'casted-val'))
+
+       nil)))))
+
     (def s-c-str
-     (built-in-fn s-ident (quote c-str) 1 (fn (args) (uncons args (fn (v _)
-      (c-call LLVMBuildRet *
-       * main-b
-       * (build-val string-type-index (extract-value v 'str-data-ptr')))
+     (built-in-fn s-ident (quote c-str) 1 (direct-change-type-body c-pointer-type-index string-type-index)))
 
-      nil)))))
+    (def s-symbol
+     (built-in-fn s-c-str (quote symbol) 1 (direct-change-type-body string-type-index symbol-type-index)))
 
-    (def s s-c-str)
+    (def s-symbol-name
+     (built-in-fn s-symbol (quote symbol-name) 1 (direct-change-type-body symbol-type-index string-type-index)))
+
+    (def s s-symbol-name)
 
     (def tr^ (fn (c state rec)
       (if (empty? c)
