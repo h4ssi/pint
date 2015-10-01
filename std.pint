@@ -33,12 +33,12 @@
 (def is-list
  (impls
   (fn (o) (if (= o ()) o (tail o)))
-  (fn (o) (dyn-type-test o 3))))
+  (fn (o) (dyn-type-test o 4))))
 
 (def is-fn
  (impls
   (fn (o) (if o (not (= o o)) o))
-  (fn (o) (dyn-type-test o 4))))
+  (fn (o) (dyn-type-test o 5))))
 
 (def = (impls = (fn (a b)
  (def =^ (fn (a b rec)
