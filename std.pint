@@ -56,15 +56,19 @@
       (if (is-string b)
        (p/ident 0 (c-call strcmp int * a * b))
        nil) ; a string, b is not
-      (if (is-list a)
-       (if (is-list b)
-        (if (empty? a)
-         (empty? b)
-         (if (rec (head a) (head b) rec)
-          (rec (tail a) (tail b) rec)
-          nil)) ; heads diff
-        nil) ; a list, b is not
-       nil)))) ; default
+      (if (is-symbol a)
+       (if (is-symbol b)
+        (rec (symbol-name a) (symbol-name b) rec)
+        nil) ; a symbol, b is not
+       (if (is-list a)
+        (if (is-list b)
+         (if (empty? a)
+          (empty? b)
+          (if (rec (head a) (head b) rec)
+           (rec (tail a) (tail b) rec)
+           nil)) ; heads diff
+         nil) ; a list, b is not
+        nil))))) ; default
   nil))) ; a is nil
 
  (=^ a b =^))))

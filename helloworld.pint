@@ -20,4 +20,8 @@
 
 (print (if (= print empty?) 'NOPE' ''))
 
+(print (if (= (symbol 'asdf') (symbol 'asdf')) ' :>' ''))
+
+(print (if (= (symbol 'asdf') (symbol 'bsdf')) 'NOPE' ''))
+
 (print newline)
