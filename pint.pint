@@ -72,6 +72,13 @@
 ; end of poc, start of pint
 
 (include std)
+
+(def log (fn (lvl msg) (prln (str (cons '[' (cons lvl (cons '] ' (cons msg ()))))))))
+(def debug (fn (msg) (log 'D' msg)))
+(def info (fn (msg) (log 'I' msg)))
+(def warn (fn (msg) (log 'W' msg)))
+(def error (fn (msg) (log 'E' msg)))
+
 (include parser)
 
 (def INPUT)
@@ -182,12 +189,6 @@
 (def state-get-local (fn (s key) (state-unmake s (fn (cv bb pt ba st bs gl) (getk st key)))))
 (def state-add-local (fn (s key val) (state-unmake s (fn (cv bb pt ba st bs gl)
                                      (state-make cv bb pt ba (assoc st key val) bs gl)))))
-
-(def log (fn (lvl msg) (prln (str (cons '[' (cons lvl (cons '] ' (cons msg ()))))))))
-(def debug (fn (msg) (log 'D' msg)))
-(def info (fn (msg) (log 'I' msg)))
-(def warn (fn (msg) (log 'W' msg)))
-(def error (fn (msg) (log 'E' msg)))
 
 (def state-borrow (fn (s sym)
  (def sb^ (fn (c rec)
