@@ -605,17 +605,19 @@
    (build-val number-type-index (c-call LLVMBuildFPTrunc * * main-b * val * double-type * label))
    (c-call LLVMConstNull * * value-type)))))))) ; todo handle non numeric, non pointer types (are there any?)
 
-(def tr-declare-c-fn
- (fn (name ret-type arg-types)
+(def tr-c-fn-type
+ (fn (ret-type arg-types)
   (def ret-c-type (tr-c-type ret-type))
 
   (def c-typed-args (map (fn (type) (tr-c-type type)) arg-types))
   (def num-args (list-length c-typed-args))
   
   (def arg-t-array (c-ptr-array c-typed-args))
-  (def fn-t (c-call LLVMFunctionType * * ret-c-type * arg-t-array int num-args int 0))
+  (c-call LLVMFunctionType * * ret-c-type * arg-t-array int num-args int 0)))
 
-  (c-call LLVMAddFunction * * m * (symbol-name name) * fn-t)))
+(def tr-declare-c-fn
+ (fn (name ret-type arg-types)
+  (c-call LLVMAddFunction * * m * (symbol-name name) * (tr-c-fn-type ret-type arg-types))))
 
 (def tr-declare-c-var
  (fn (name)
@@ -636,22 +638,35 @@
 
 (def tr-c-call
  (fn (form state tr)
-  (def fn-name (head (tail form)))
+  (def fn-ptr? (= (quote *) (head (tail form))))
 
-  (def ret-type (head (tail (tail form))))
-  (def typed-args (chunk 2 (tail (tail (tail form))))) ; care for wrongly chunked!
+  (def fn-expr (head (drop (if fn-ptr? 2 1) form)))
+
+  (def sig (drop (if fn-ptr? 3 2) form))
+
+  (def ret-type (head sig))
+  (def typed-args (chunk 2 (tail sig))) ; care for wrongly chunked!
+  (def arg-types (map fst (head typed-args)))
 
   (def state^
-   (if (state-get-global state fn-name)
-    state
-    (state-add-global-fn state fn-name ret-type (map fst (head typed-args)))))
+   (if fn-ptr?
+    (tr (cons fn-expr ()) state tr)
+    (if (state-get-global state fn-expr)
+     state
+     (state-add-global-fn state fn-expr ret-type arg-types))))
 
-  (def entry (state-get-global state^ fn-name))
-
-  (def target-fn (unpair entry (fn (label val)
-                                (if (= label c-fn-tag)
-                                 val
-                                 (error (str (cons 'not a C fn: ' (cons (symbol-name fn-name) ()))))))))
+  (def target-fn
+   (if fn-ptr?
+    (extract-pointer
+     (state-cur-value state^)
+     (c-call LLVMPointerType * * (tr-c-fn-type ret-type arg-types) int 0)
+     'fn-ptr')
+    (do
+     (def entry (state-get-global state^ fn-expr))
+     (unpair entry (fn (label val)
+                    (if (= label c-fn-tag)
+                     val
+                     (error (str (cons 'not a C fn: ' (cons (symbol-name fn-expr) ()))))))))))
 
   (def casts (stap (fn (st typed-arg)
                     (unpair typed-arg
@@ -673,7 +688,7 @@
             * target-fn
             * (c-ptr-array c-casted-args)
             int num-args
-            * (if is-void '' (str (cons 'call-' (cons (symbol-name fn-name) ()))))))
+            * (if is-void '' (str (cons 'call-' (cons (if fn-ptr? 'fn-ptr' (symbol-name fn-expr)) ()))))))
 
   (if is-void
    (tr-nil state^^)
