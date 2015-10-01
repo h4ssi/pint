@@ -31,7 +31,7 @@
 (def b (c-call LLVMCreateBuilder *))
 (c-call LLVMPositionBuilderAtEnd void * b * bb)
 (def r (c-call LLVMBuildNSWAdd * * b * (c-call LLVMGetParam * * f int 0) * (c-call LLVMGetParam * * f int 1) * ''))
-(c-call LLVMBuildRet void * b * r)
+(c-call LLVMBuildRet * * b * r)
 
 (def LLVMAbortProcessAction 0)
 (def LLVMPrintMessageAction 1)
