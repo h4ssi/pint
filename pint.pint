@@ -30,6 +30,11 @@
   array)
  c-ptr-array))
 
+(def c-ref)
+(def ref-build (fn ()  (if p/ident (c-array * 1) (c-ref))))
+(def ref-ref   (fn (r) (if p/ident r             (c-ref r))))
+(def ref-deref (fn (r) (if p/ident (c-get * r)   r)))
+
 (def pr (fn (x) (print (str (cons x ())))))
 (def prln (fn (x) (print (str (cons x (cons '
 ' ()))))))
@@ -54,11 +59,11 @@
     nil
     (prln 'error verifying function'))
 
-(def err (c-ref))
+(def err (ref-build))
 
-(if (= 0 (c-call LLVMVerifyModule int * m int LLVMPrintMessageAction * (c-ref err)))
+(if (= 0 (c-call LLVMVerifyModule int * m int LLVMPrintMessageAction * (ref-ref err)))
     nil
-    (prln (c-str err)))
+    (prln (c-str (ref-deref err))))
 
 (c-call LLVMDisposeBuilder void * b)
 
@@ -68,13 +73,13 @@
 (c-call ExternLLVMInitializeNativeTarget void) ; todo inlining does not work :/
 (c-call ExternLLVMInitializeNativeAsmPrinter void) 
 
-(def ee (c-ref))
+(def ee (ref-build))
 
-(if (= 0 (c-call LLVMCreateJITCompilerForModule int * (c-ref ee) * m int 0 * (c-ref err)))
+(if (= 0 (c-call LLVMCreateJITCompilerForModule int * (ref-ref ee) * m int 0 * (ref-ref err)))
     nil
-    (prln (c-str err)))
+    (prln (c-str (ref-deref err))))
 
-(def plus (c-call LLVMGetPointerToGlobal * * ee * f))
+(def plus (c-call LLVMGetPointerToGlobal * * (ref-deref ee) * f))
 
 (prln (str (cons 'calling ' (cons plus ()))))
 
@@ -1455,17 +1460,17 @@
 (def LLVMPrintMessageAction 1)
 (def LLVMReturnStatusAction 2)
 
-(def err (c-ref))
+(def err (ref-build))
 
-(if (= 0 (c-call LLVMVerifyModule int * m int LLVMPrintMessageAction * (c-ref err)))
+(if (= 0 (c-call LLVMVerifyModule int * m int LLVMPrintMessageAction * (ref-ref err)))
     nil
-    (prln (c-str err)))
+    (prln (c-str (ref-deref err))))
 
 (c-call LLVMDisposeBuilder void * main-b)
 
 (prln '')
 
 (c-call LLVMDumpModule void * m)
-(if (= 0 (c-call LLVMPrintModuleToFile int * m * 'out.ll' * (c-ref err)))
+(if (= 0 (c-call LLVMPrintModuleToFile int * m * 'out.ll' * (ref-ref err)))
     nil
-    (prln (c-str err)))
+    (prln (ref-deref err)))
