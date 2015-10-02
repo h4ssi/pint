@@ -290,8 +290,53 @@
 (def str-length
   (fn (s) (list-length (to-list s))))
 
+; todo remove polyfill once compiler is self hosting
+(def str)
+(def str (impls str (fn (items)
+
+ (def format-reduce (fn (item target-fn len-fn)
+
+  (def format-reduce^ (fn (i num-bytes-formatted rec)
+
+   (def trgt (fn () (target-fn num-bytes-formatted)))
+   (def ln   (fn () (len-fn    num-bytes-formatted)))
+
+   (if (is-number i)
+    (c-call snprintf int * (trgt) uint (ln) * '%g' double i)
+   (if (is-string i)
+    (do
+     (def t (trgt))
+     (if t
+      (c-call strncpy * * t * i uint (ln))
+      nil) ; todo: compiler gets conused with varargs and different signatures for the same fn
+     (c-call strlen uint * i))
+   (if (is-list i)
+    (leduce
+     (fn (res el)
+      (def new-bytes (rec el (+ num-bytes-formatted res) rec))
+      (+ res new-bytes))
+     0
+     i)
+    0)))))
+
+  (format-reduce^ item 0 format-reduce^)))
+
+ (def format-len (format-reduce items (fn (_) nil) (fn (_) 0)))
+ (def buffer-len (+ 1 format-len))
+
+ (def target (c-array char buffer-len))
+ (c-set char (c-array-addr char 0 target) 0)
+
+ (def format-str
+  (format-reduce
+   items
+   (fn (num-bytes) (c-array-addr char num-bytes target))
+   (fn (num-bytes) (+ buffer-len (- num-bytes)))))
+
+ (c-str target))))
+
 (def quote-fn
- (fn (expr) ; this should be a macro, for now its call is hard coded in the reader
+ (fn (expr) ; todo this should be a macro, for now its call is hard coded in the reader
 
   (def quote^ (fn (e rec)
    (if (is-symbol e)
