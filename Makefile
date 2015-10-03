@@ -29,6 +29,23 @@ includer-hack.s: includer-hack.ll
 includer-hack: includer-hack.s
 	clang includer-hack.s -o includer-hack
 
+pint.ll: hello pint.pint std.pint parser.pint io.pint includer-hack
+	./hello <(echo -n pint.pint | ./includer-hack) <(echo -n pint.pint | ./includer-hack)
+	mv out.ll pint.ll
+
+pint.s: pint.ll
+	llc pint.ll
+
+pint: pint.s extern.o
+	clang++ pint.s extern.o $(shell llvm-config --ldflags --system-libs --libs engine) -o pint
+
+pint-from-compiler.ll: pint pint.pint std.pint parser.pint io.pint includer-hack
+	echo -n pint.pint | ./includer-hack | ./pint
+	mv out.ll pint-from-compiler.ll
+
+test-self-hosting: pint.ll pint-from-compiler.ll
+	diff pint.ll pint-from-compiler.ll
+
 build-pint.ll: build-pint.pint includer-hack hello pint.pint std.pint io.pint parser.pint
 	./hello <(echo -n pint.pint | ./includer-hack) <(echo -n build-pint.pint | ./includer-hack)
 	mv out.ll build-pint.ll
@@ -40,7 +57,7 @@ build-pint: build-pint.s
 	clang build-pint.s -o build-pint
 
 clean:
-	rm -f hello hello.o extern.o llvm-c-poc helloworld{,.s,.ll} includer-hack{,.s,.ll} build-pint{,.s,.ll}
+	rm -f hello hello.o extern.o llvm-c-poc helloworld{,.s,.ll} includer-hack{,.s,.ll} pint{,.s,.ll,-from-compiler.ll} build-pint{,.s,.ll}
 
-.PHONY: all clean
+.PHONY: all clean test-self-hosting
 
