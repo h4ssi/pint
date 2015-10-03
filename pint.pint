@@ -18,6 +18,9 @@
 (include io)
 (include std)
 
+(print 'pint v0.1.0
+')
+
 (def c-ptr-array)
 (def c-ptr-array (if p/ident
  (fn (ptr-list)
