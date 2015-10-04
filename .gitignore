@@ -1,5 +1,8 @@
-/hello
-/helloworld
 *.ll
+*.s
 *.o
-/llvm-c-poc
+/pint*
+/hello*
+/includer-hack*
+/build-pint*
+!*.pint

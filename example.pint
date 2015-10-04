@@ -1,4 +1,6 @@
 
+; todo: this example program uses features that were present in the interpreter, but are not yet implemented in the compiler: macros
+
 (print 'hello world!
 ');
 (c-call puts int * 'hello world from c puts call!')
