@@ -10,42 +10,24 @@
 
 (def empty? (fn (l) (if (tail l) nil l)))
 
-; provide replacements for interpreter built ins
-
-(def impls (fn (interpreted compiled) (if p/ident compiled interpreted)))
-
-; care: until this fns are actually defined, they may only be used in interpreter impls
-(def =)
-(def str)
-
 (def dyn-type-test (fn (val type-index) (p/ident (p/type val) type-index)))
 
 (def is-number
- (impls
-  (fn (o) (= o (+ 0 o)))
-  (fn (o) (dyn-type-test o 1))))
+ (fn (o) (dyn-type-test o 1)))
 
 (def is-string
- (impls
-  (fn (o) (= o (str (cons o))))
-  (fn (o) (dyn-type-test o 2))))
+ (fn (o) (dyn-type-test o 2)))
 
 (def is-symbol
- (impls
-  (fn (o) (= o (symbol (symbol-name o))))
-  (fn (o) (dyn-type-test o 3))))
+ (fn (o) (dyn-type-test o 3)))
 
 (def is-list
- (impls
-  (fn (o) (if (= o ()) o (tail o)))
-  (fn (o) (dyn-type-test o 4))))
+ (fn (o) (dyn-type-test o 4)))
 
 (def is-fn
- (impls
-  (fn (o) (if o (not (= o o)) o))
-  (fn (o) (dyn-type-test o 5))))
+ (fn (o) (dyn-type-test o 5)))
 
-(def = (impls = (fn (a b)
+(def = (fn (a b)
  (def =^ (fn (a b rec)
   (if a
    (if (is-fn a)
@@ -71,16 +53,12 @@
         nil))))) ; default
   nil))) ; a is nil
 
- (=^ a b =^))))
+ (=^ a b =^)))
 
-(def substr)
-
-(def substr (impls substr (fn (string start len)
+(def substr (fn (string start len)
  (def s-ptr (c-call memset * * string int 0 uint 0)) ; convert to ptr
 
- (c-str (c-call strndup * * (c-array-addr char start s-ptr) uint len)))))
-
-; interpreter built in replacments end
+ (c-str (c-call strndup * * (c-array-addr char start s-ptr) uint len))))
 
 (def pair
   (fn (l r)
@@ -290,9 +268,7 @@
 (def str-length
   (fn (s) (list-length (to-list s))))
 
-; todo remove polyfill once compiler is self hosting
-(def str)
-(def str (impls str (fn (items)
+(def str (fn (items)
 
  (def format-reduce (fn (item target-fn len-fn)
 
@@ -333,7 +309,7 @@
    (fn (num-bytes) (c-array-addr char num-bytes target))
    (fn (num-bytes) (+ buffer-len (- num-bytes)))))
 
- (c-str target))))
+ (c-str target)))
 
 (def quote-fn
  (fn (expr) ; todo this should be a macro, for now its call is hard coded in the reader

@@ -21,8 +21,7 @@
 (print 'pint v0.1.1-dev
 ')
 
-(def c-ptr-array)
-(def c-ptr-array (if p/ident
+(def c-ptr-array
  (fn (ptr-list)
   (def l (list-length ptr-list))
   (def array (c-array * l))
@@ -30,13 +29,11 @@
    (fn (p) (unpair p (fn (i ptr)
     (c-set * (c-array-addr * i array) ptr))))
    (zip (range l) ptr-list))
-  array)
- c-ptr-array))
+  array))
 
-(def c-ref)
-(def ref-build (fn ()  (if p/ident (c-array * 1) (c-ref))))
-(def ref-ref   (fn (r) (if p/ident r             (c-ref r))))
-(def ref-deref (fn (r) (if p/ident (c-get * r)   r)))
+(def ref-build (fn ()  (c-array * 1)))
+(def ref-ref   (fn (r) r))
+(def ref-deref (fn (r) (c-get * r)))
 
 (def pr (fn (x) (print (str (cons x ())))))
 (def prln (fn (x) (print (str (cons x (cons '
@@ -100,8 +97,7 @@
 
 (include parser)
 
-(def INPUT)
-(def INPUT (if p/ident (slurp-stdin) INPUT))
+(def INPUT (slurp-stdin))
 
 (def code (parse INPUT))
 
