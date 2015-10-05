@@ -21,6 +21,16 @@
 (print 'pint v0.1.1-dev
 ')
 
+(def pr (fn (x) (print (str (cons x ())))))
+(def prln (fn (x) (print (str (cons x (cons '
+' ()))))))
+
+(def log (fn (lvl msg) (prln (str (cons '[' (cons lvl (cons '] ' (cons msg ()))))))))
+(def debug (fn (msg) (log 'D' msg)))
+(def info (fn (msg) (log 'I' msg)))
+(def warn (fn (msg) (log 'W' msg)))
+(def error (fn (msg) (log 'E' msg)))
+
 (def c-ptr-array
  (fn (ptr-list)
   (def l (list-length ptr-list))
@@ -30,70 +40,6 @@
     (c-set * (c-array-addr * i array) ptr))))
    (zip (range l) ptr-list))
   array))
-
-(def ref-build (fn ()  (c-array * 1)))
-(def ref-ref   (fn (r) r))
-(def ref-deref (fn (r) (c-get * r)))
-
-(def pr (fn (x) (print (str (cons x ())))))
-(def prln (fn (x) (print (str (cons x (cons '
-' ()))))))
-
-(def c (c-call LLVMGetGlobalContext *))
-(def m (c-call LLVMModuleCreateWithNameInContext * * 'test' * c))
-(def i (c-call LLVMInt32TypeInContext * * c))
-(def ps (c-ptr-array (cons i (cons i ()))))
-(def ft (c-call LLVMFunctionType * * i * ps int 2 int 0))
-(def f (c-call LLVMAddFunction * * m * 'plus' * ft))
-(def bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'entry'))
-(def b (c-call LLVMCreateBuilder *))
-(c-call LLVMPositionBuilderAtEnd void * b * bb)
-(def r (c-call LLVMBuildNSWAdd * * b * (c-call LLVMGetParam * * f int 0) * (c-call LLVMGetParam * * f int 1) * ''))
-(c-call LLVMBuildRet * * b * r)
-
-(def LLVMAbortProcessAction 0)
-(def LLVMPrintMessageAction 1)
-(def LLVMReturnStatusAction 2)
-
-(if (= 0 (c-call LLVMVerifyFunction int * f int LLVMPrintMessageAction))
-    nil
-    (prln 'error verifying function'))
-
-(def err (ref-build))
-
-(if (= 0 (c-call LLVMVerifyModule int * m int LLVMPrintMessageAction * (ref-ref err)))
-    nil
-    (prln (c-str (ref-deref err))))
-
-(c-call LLVMDisposeBuilder void * b)
-
-(c-call LLVMDumpModule void * m)
-
-(c-call LLVMLinkInMCJIT void)
-(c-call ExternLLVMInitializeNativeTarget void) ; todo inlining does not work :/
-(c-call ExternLLVMInitializeNativeAsmPrinter void) 
-
-(def ee (ref-build))
-
-(if (= 0 (c-call LLVMCreateJITCompilerForModule int * (ref-ref ee) * m int 0 * (ref-ref err)))
-    nil
-    (prln (c-str (ref-deref err))))
-
-(def plus (c-call LLVMGetPointerToGlobal * * (ref-deref ee) * f))
-
-(prln (str (cons 'calling ' (cons plus ()))))
-
-(prln (str (cons '3 + 4 = ' (cons (c-call * plus int int 3 int 4) ()))))
-
-(prln '')
-
-; end of poc, start of pint
-
-(def log (fn (lvl msg) (prln (str (cons '[' (cons lvl (cons '] ' (cons msg ()))))))))
-(def debug (fn (msg) (log 'D' msg)))
-(def info (fn (msg) (log 'I' msg)))
-(def warn (fn (msg) (log 'W' msg)))
-(def error (fn (msg) (log 'E' msg)))
 
 (include parser)
 
@@ -1458,6 +1404,10 @@
 (def LLVMAbortProcessAction 0)
 (def LLVMPrintMessageAction 1)
 (def LLVMReturnStatusAction 2)
+
+(def ref-build (fn ()  (c-array * 1)))
+(def ref-ref   (fn (r) r))
+(def ref-deref (fn (r) (c-get * r)))
 
 (def err (ref-build))
 

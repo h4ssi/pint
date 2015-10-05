@@ -43,8 +43,18 @@ build-pint.s: build-pint.ll
 build-pint: build-pint.s
 	clang build-pint.s -o build-pint
 
+poc.ll: pint includer-hack poc.pint
+	echo -n poc.pint | ./includer-hack | ./pint
+	mv out.ll poc.ll
+
+poc.s: poc.ll
+	llc poc.ll
+
+poc: poc.s extern.o
+	clang++ poc.s extern.o $(shell llvm-config --ldflags --system-libs --libs engine) -o poc
+
 clean:
-	rm -f extern.o helloworld{,.s,.ll} includer-hack{,.s,.ll} pint-dev{,.s,.ll} build-pint{,.s,.ll}
+	rm -f extern.o helloworld{,.s,.ll} includer-hack{,.s,.ll} pint-dev{,.s,.ll} build-pint{,.s,.ll} poc{,.s,.ll}
 
 clean-bootstrap: clean
 	rm -f pint
