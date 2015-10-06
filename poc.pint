@@ -66,3 +66,37 @@
 
 (prln (str (cons '3 + 4 = ' (cons (c-call * plus int int 3 int 4) ()))))
 
+(def ps (c-ptr-array (cons i (cons i ()))))
+(def ft (c-call LLVMFunctionType * * i * ps int 2 int 0))
+(def f (c-call LLVMAddFunction * * m * 'minus' * ft))
+(def bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'entry'))
+(def b (c-call LLVMCreateBuilder *))
+(c-call LLVMPositionBuilderAtEnd void * b * bb)
+(def r (c-call LLVMBuildNSWSub * * b * (c-call LLVMGetParam * * f int 0) * (c-call LLVMGetParam * * f int 1) * ''))
+(c-call LLVMBuildRet * * b * r)
+
+(if (= 0 (c-call LLVMVerifyFunction int * f int LLVMPrintMessageAction))
+    nil
+    (prln 'error verifying function'))
+
+(def err (ref-build))
+
+(if (= 0 (c-call LLVMVerifyModule int * m int LLVMPrintMessageAction * (ref-ref err)))
+    nil
+    (prln (c-str (ref-deref err))))
+
+(c-call LLVMDisposeBuilder void * b)
+
+(c-call LLVMDumpModule void * m)
+
+(def ee (ref-build))
+
+(if (= 0 (c-call LLVMCreateJITCompilerForModule int * (ref-ref ee) * m int 0 * (ref-ref err)))
+    nil
+    (prln (c-str (ref-deref err))))
+
+(def plus (c-call LLVMGetPointerToGlobal * * (ref-deref ee) * f))
+
+(prln (str (cons 'calling ' (cons plus ()))))
+
+(prln (str (cons '3 - 4 = ' (cons (c-call * plus int int 3 int 4) ()))))
