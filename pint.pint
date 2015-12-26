@@ -832,9 +832,9 @@
                (state-add-local local-state '' frame-reg)
                (zip args arg-regs)))
 
-      (def local-state^^ (tr body local-state^ tr))
+      (def local-state^^ (tr body (state-set-cur-value local-state^ (state-cur-value (tr-nil local-state^))) tr))
 
-      (c-call LLVMBuildRet * * main-b * (state-cur-value local-state^^)) ; todo care for empty body
+      (c-call LLVMBuildRet * * main-b * (state-cur-value local-state^^))
 
       local-state^^))
     (fn (f local-state^^)
