@@ -250,14 +250,15 @@
 (def gep-list-elem-val (fn (list-elem label) (gep-with-index list-elem 0 label)))
 (def gep-list-elem-next (fn (list-elem label) (gep-with-index list-elem 1 label)))
 
-(def tr-nil (fn (state)
- (state-set-cur-value state
+(def const-nil 
   (c-call LLVMConstNamedStruct *
     * value-type
     * (c-ptr-array
         (cons nil-type-index
         (cons (c-call LLVMConstNull * * i64-type) ())))
-    int 2))))
+    int 2))
+
+(def tr-nil (fn (state) (state-set-cur-value state const-nil)))
 
 (def tr-number (fn (number state)
   (state-set-cur-value state
@@ -652,9 +653,9 @@
             int num-args
             * (if is-void '' (str (cons 'call-' (cons (if fn-ptr? 'fn-ptr' (symbol-name fn-expr)) ()))))))
 
-  (if is-void
-   (tr-nil state^^)
-   (state-set-cur-value state^^
+  (state-set-cur-value state^^
+   (if is-void
+    const-nil
     (tr-cast-from-c-type state^^ ret-type res)))))
 
 (def tr-c-val-ref
@@ -832,7 +833,7 @@
                (state-add-local local-state '' frame-reg)
                (zip args arg-regs)))
 
-      (def local-state^^ (tr body (state-set-cur-value local-state^ (state-cur-value (tr-nil local-state^))) tr))
+      (def local-state^^ (tr body (state-set-cur-value local-state^ const-nil) tr))
 
       (c-call LLVMBuildRet * * main-b * (state-cur-value local-state^^))
 
@@ -1122,7 +1123,7 @@
 
       (c-call LLVMPositionBuilderAtEnd void * main-b * nil-bb)
 
-      (c-call LLVMBuildRet * * main-b * (state-cur-value (tr-nil s-malloc)))
+      (c-call LLVMBuildRet * * main-b * const-nil)
 
       (c-call LLVMPositionBuilderAtEnd void * main-b * list-bb)
 
@@ -1168,7 +1169,7 @@
 
       (c-call LLVMPositionBuilderAtEnd void * main-b * nil-bb)
 
-      (c-call LLVMBuildRet * * main-b * (state-cur-value (tr-nil s-malloc)))
+      (c-call LLVMBuildRet * * main-b * const-nil)
 
       (c-call LLVMPositionBuilderAtEnd void * main-b * list-bb)
 
@@ -1203,7 +1204,7 @@
 
       (c-call LLVMPositionBuilderAtEnd void * main-b * nil-bb)
 
-      (c-call LLVMBuildRet * * main-b * (state-cur-value (tr-nil s-malloc)))
+      (c-call LLVMBuildRet * * main-b * const-nil)
 
       (c-call LLVMPositionBuilderAtEnd void * main-b * list-bb)
 
@@ -1319,14 +1320,14 @@
                  * main-b
                  * t-eq
                  * l
-                 * (state-cur-value (tr-nil s-type))
+                 * const-nil
                  * 't-ok'))
 
       (def v-ok (c-call LLVMBuildSelect *
                  * main-b
                  * v-eq
                  * t-ok
-                 * (state-cur-value (tr-nil s-type))
+                 * const-nil
                  * 'v-ok'))
       
       (c-call LLVMBuildRet * * main-b * v-ok)
@@ -1342,7 +1343,7 @@
            * main-b
            * (tr-type-test from-type-index v)
            * (build-val to-type-index (extract-value v 'data'))
-           * (state-cur-value (tr-nil s-ident))
+           * const-nil
            * 'casted-val'))
 
        nil)))))
