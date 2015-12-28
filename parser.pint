@@ -1,5 +1,5 @@
 
-(def OP '(') ; ) (
+(def OP '(') ; fix vim syntax highlighting ) (
 (def CP ')')
 
 (def newline '
@@ -16,13 +16,46 @@
 (def is-digit
   (fn (x) (in-str x digit)))
 
+(def parse-state (fn (pos parsed unparsed) (cons pos (cons parsed (cons unparsed ())))))
+(def ps-undo
+ (fn (ps cb)
+  (uncons ps (fn (pos ps)
+  (uncons ps (fn (parsed ps)
+  (uncons ps (fn (unparsed ps)
+   (cb pos parsed unparsed)))))))))
+
+(def parse-pos pair)
+(def pp-init (parse-pos 1 1))
+(def pp-undo unpair)
+(def pp-line (fn (pos) (pp-undo (fn (line _) line))))
+(def pp-col (fn (pos) (pp-undo (fn (_ col) col))))
+(def pp-next-cols (fn (pos num) (pp-undo pos (fn (line col) (parse-pos line (+ num col))))))
+(def pp-next-col (fn (pos) (pp-next-cols pos 1)))
+(def pp-next-line (fn (pos) (pp-undo pos (fn (line _) (parse-pos (+ 1 line) 1)))))
+(def pp-next (fn (pos char) ((if (is-newline char) pp-next-line pp-next-col) pos)))
+
+(def pp-str (fn (pos) (pp-undo pos (fn (line col) (cons '@l:' (cons line (cons '/c:' (cons col ()))))))))
+
+(def parse-debug (fn (pos msg) (prln (str (cons '[P] ' (cons msg (cons ' ' (cons (pp-str pos) ()))))))))
+
+(def err (fn (x m pos)
+ (pp-undo pos (fn (line col) (error (str (cons m (cons ' ' (cons (pp-str pos) ())))))))
+ (parse-state pos (cons nil ()) x)))
+
 (def parse-sym
-  (fn (cs prs)
+  (fn (cs pos _)
+    (parse-debug pos 'parsing sym')
+
     (def sym-char
       (fn (c) (not (in-str c (str (cons whitespace (cons CP (cons OP (cons '\';' ())))))))))
 
-    (pair
-      (symbol (str (take-while sym-char cs)))
+    (def name (str (take-while sym-char cs)))
+
+    (parse-debug pos name)
+
+    (parse-state
+      (pp-next-cols pos (str-length name))
+      (symbol name)
       (drop-while sym-char cs))))
 
 (def digit-to-number
@@ -40,7 +73,9 @@
     nil))))))))))))
 
 (def parse-number
-  (fn (cs prs)
+  (fn (cs pos _)
+    (parse-debug pos 'parsing-number')
+
     (def dec (take-while is-digit cs))
     (def r   (drop-while is-digit cs))
 
@@ -50,99 +85,116 @@
                 (tail r)
                 r)))
 
+    (def parsed-point? (not (p/ident r rr)))
+
     (def com (take-while is-digit rr))
     (def rrr (drop-while is-digit rr))
 
     (def n   (fn (l) (leduce (fn (nn dd) (+ (digit-to-number dd) (* 10 nn))) 0 l)))
     (def m   (fn (l) (leduce (fn (nn dd) (* 10 nn)) 1 l)))
 
-    (pair (+ (n dec) (* (n com) (/ (m com)))) rrr)))
+    (def val (+ (n dec) (* (n com) (/ (m com)))))
 
-(def err (fn (x m) (error m) (pair (cons nil ()) x)))
+    (parse-debug pos val)
+
+    (parse-state
+     (pp-next-cols pos (+ (list-length dec) (+ (list-length com) (if parsed-point? 1 0))))
+     val
+     rrr)))
 
 (def parse-list
-  (fn (cs prs)
-    (def parse-list^
-      (fn (ccs rec)
+ (fn (cs pos prs)
+  (parse-debug pos 'parsing list')
 
-        ((fn (p)
-          (if (nil? p)
-            (err ccs 'unexpected eof during list')
-            ((fn (t r)
-              (if (nil? t) ; end of list maybe?
-                (if (empty? r)
-                  (err ccs 'missing end of list')
-                  (if (= CP (head r))
-                    (pair () (tail r))
-                    (err ccs (str (cons 'unexpected: ' (cons (head r) ()))))))
-                ((fn (pp)
-                ((fn (tt rr)
-                  (pair (cons t tt) rr)
-                )(head pp)(head (tail pp)))
-                )(rec r rec)))
-            )(head p)(head (tail p))))
-        )(prs ccs prs))))
+  (def parse-list^
+   (fn (ccs pos rec)
+    (def p (prs ccs pos prs))
 
-      (parse-list^ (tail cs) parse-list^)))
+    (if (nil? p)
+     (err ccs 'unexpected eof during list' pos)
+     (ps-undo p
+      (fn (new-pos p u)
+      (parse-debug pos (str (cons 'intermediate parse' (cons (pp-str new-pos) ()))))
+
+      (if (nil? p) ; end of list maybe?
+       (if (empty? u)
+        (err ccs 'missing end of list' new-pos)
+        (if (= CP (head u))
+         (parse-state (pp-next-col new-pos) () (tail u))
+         (err ccs (str (cons 'unexpected: ' (cons (head u) ()))) new-pos)))
+
+       ; otherwise, we got list elem
+       (ps-undo
+        (rec u new-pos rec)
+        (fn (end-pos pp uu)
+         (parse-debug pos (str (cons 'list item' (cons (pp-str new-pos) ()))))
+         (parse-state end-pos (cons p pp) uu)))))))))
+
+   (parse-list^ (tail cs) (pp-next-col pos) parse-list^)))
 
 (def parse-string
-  (fn (cs rec)
-    (def pcons
-      (fn (i p)
-        (def f (head p))
-        (def s (head (tail p)))
+ (fn (cs pos rec)
+  (parse-debug pos 'parsing string')
 
-        (if f
-          (pair (cons i f) s)
-          p)))
+  (def add-chunk
+   (fn (chunk ps)
+   (ps-undo ps
+    (fn (pos parsed unparsed)
+    (parse-state pos (cons chunk parsed) unparsed)))))
 
-    (def escape
-      (fn (escape-next ccs rec)
-        (if (empty? ccs)
-          (err ccs 'unexpected eof during string')
-          (if escape-next
-            (pcons (head ccs) (rec nil (tail ccs) rec))
-            (if (= '\\' (head ccs))
-              (rec '' (tail ccs) rec)
-              (if (= '\'' (head ccs))
-                (pair () (tail ccs))
-                (pcons (head ccs) (rec nil (tail ccs) rec))))))))
+  (def escape
+   (fn (escape-next? ccs pos rec)
+    (if (empty? ccs)
+     (err ccs 'unexpected eof during string' pos)
+     (uncons ccs (fn (c cs)
+      (if escape-next?
+       (add-chunk c (rec nil cs (pp-next pos c) rec))
+       (if (= '\\' c)
+        (rec '' cs (pp-next-col pos) rec)
+        (if (= '\'' c)
+         (parse-state (pp-next-col pos) () cs)
+         (add-chunk c (rec nil cs (pp-next pos c) rec))))))))))
 
-    (def e (escape nil (tail cs) escape))
+  (ps-undo
+   (escape nil (tail cs) (pp-next-col pos) escape)
+   (fn (end-pos parsed unparsed)
+   (def s (str parsed))
 
-    (def f (head e))
-    (def s (head (tail e)))
+   (parse-debug pos s)
 
-    (pair (str (cons f ())) s)))
+   (parse-state end-pos s unparsed)))))
 
 (def parse-expr
-  (fn (cs rec)
-    (if (empty? cs)
-      nil
-      ((fn (c)
-        (if (is-whitespace c) (rec (drop-while is-whitespace cs) rec)
-        (if (= c ';') (rec (drop-while not-is-newline cs) rec)
-        (if (= c OP) (parse-list cs rec)
-        (if (= c CP) (pair nil cs)
-        (if (= c '\'') (parse-string cs rec)
-        (if (is-digit c) (parse-number cs rec)
-        (parse-sym cs rec)
-        ))))))
-      )(head cs)))))
-
+ (fn (ccs pos rec)
+  (if (empty? ccs)
+   nil
+   (uncons ccs (fn (c cs)
+    (if (is-newline c) (rec cs (pp-next-line pos) rec)
+    (if (is-whitespace c) (rec cs (pp-next-col pos) rec)
+    (if (= c ';') (rec (drop-while not-is-newline cs) (pp-next-line pos) rec)
+    (if (= c OP) (parse-list ccs pos rec)
+    (if (= c CP) (parse-state pos nil ccs)
+    (if (= c '\'') (parse-string ccs pos rec)
+    (if (is-digit c) (parse-number ccs pos rec)
+    (parse-sym ccs pos rec)))))))))))))
 
 (def parse-all
-  (fn (cs rec)
-    ((fn (p)
-    (if (nil? p)
-      ()
-      ((fn (t r)
-        (if (nil? t)
-          (cons t ())
-          (cons t (rec r rec)))
-      )(head p)(head (tail p)))
-    )
-    )(parse-expr cs parse-expr))))
+ (fn (cs pos rec)
+  (def p (parse-expr cs pos parse-expr))
 
-(def parse (fn (source) (parse-all (to-list source) parse-all)))
+  (if (nil? p)
+   ()
+   (ps-undo p
+    (fn (pos parsed unparsed)
+     (parse-debug pos 'parsed top level expr')
+     (cons parsed (rec unparsed pos rec)))))))
+
+(def parse (fn (source)
+ (parse-debug pp-init 'starting parse')
+
+ (def parsed (parse-all (to-list source) pp-init parse-all))
+
+ (parse-debug pp-init 'parsing done')
+
+ parsed))
 
