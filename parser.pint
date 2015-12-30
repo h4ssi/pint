@@ -187,7 +187,12 @@
    (ps-undo p
     (fn (pos parsed unparsed)
      (parse-debug pos 'parsed top level expr')
-     (cons parsed (rec unparsed pos rec)))))))
+
+     (if parsed
+      (cons parsed (rec unparsed pos rec))
+      (do
+       (err unparsed 'not a top level expr' pos)
+       nil)))))))
 
 (def parse (fn (source)
  (parse-debug pp-init 'starting parse')
