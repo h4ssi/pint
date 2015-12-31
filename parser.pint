@@ -16,13 +16,24 @@
 (def is-digit
   (fn (x) (in-str x digit)))
 
-(def parse-state (fn (pos parsed unparsed) (cons pos (cons parsed (cons unparsed ())))))
+(def parse-state-full (fn (pos parsed unparsed error?) (cons pos (cons parsed (cons unparsed (cons error? ()))))))
+(def parse-state (fn (pos parsed unparsed) (parse-state-full pos parsed unparsed nil)))
+(def parse-state-error (fn (pos parsed unparsed) (parse-state-full pos parsed unparsed '')))
 (def ps-undo
  (fn (ps cb)
   (uncons ps (fn (pos ps)
   (uncons ps (fn (parsed ps)
   (uncons ps (fn (unparsed ps)
-   (cb pos parsed unparsed)))))))))
+  (uncons ps (fn (error? ps)
+   (cb pos parsed unparsed error?)))))))))))
+(def ps-undo-if-success
+ (fn (ps cb)
+  (ps-undo
+   ps
+   (fn (pos parsed unparsed error?)
+    (if error?
+     ps
+     (cb pos parsed unparsed))))))
 
 (def parse-pos pair)
 (def pp-init (parse-pos 1 1))
@@ -40,7 +51,7 @@
 
 (def err (fn (x m pos)
  (pp-undo pos (fn (line col) (error (str (cons m (cons ' ' (cons (pp-str pos) ())))))))
- (parse-state pos (cons nil ()) x)))
+ (parse-state-error pos (cons nil ()) x)))
 
 (def parse-sym
   (fn (cs pos _)
@@ -112,23 +123,23 @@
 
     (if (nil? p)
      (err ccs 'unexpected eof during list' pos)
-     (ps-undo p
+     (ps-undo-if-success p
       (fn (new-pos p u)
-      (parse-debug pos (str (cons 'intermediate parse' (cons (pp-str new-pos) ()))))
+       (parse-debug pos (str (cons 'intermediate parse' (cons (pp-str new-pos) ()))))
 
-      (if (nil? p) ; end of list maybe?
-       (if (empty? u)
-        (err ccs 'missing end of list' new-pos)
-        (if (= CP (head u))
-         (parse-state (pp-next-col new-pos) () (tail u))
-         (err ccs (str (cons 'unexpected: ' (cons (head u) ()))) new-pos)))
+       (if (nil? p) ; end of list maybe?
+        (if (empty? u)
+         (err ccs 'missing end of list' new-pos)
+         (if (= CP (head u))
+          (parse-state (pp-next-col new-pos) () (tail u))
+          (err ccs (str (cons 'unexpected: ' (cons (head u) ()))) new-pos)))
 
-       ; otherwise, we got list elem
-       (ps-undo
-        (rec u new-pos rec)
-        (fn (end-pos pp uu)
-         (parse-debug pos (str (cons 'list item' (cons (pp-str new-pos) ()))))
-         (parse-state end-pos (cons p pp) uu)))))))))
+        ; otherwise, we got list elem
+        (ps-undo-if-success
+         (rec u new-pos rec)
+         (fn (end-pos pp uu)
+          (parse-debug pos (str (cons 'list item' (cons (pp-str new-pos) ()))))
+          (parse-state end-pos (cons p pp) uu)))))))))
 
    (parse-list^ (tail cs) (pp-next-col pos) parse-list^)))
 
@@ -138,9 +149,9 @@
 
   (def add-chunk
    (fn (chunk ps)
-   (ps-undo ps
+   (ps-undo-if-success ps
     (fn (pos parsed unparsed)
-    (parse-state pos (cons chunk parsed) unparsed)))))
+     (parse-state pos (cons chunk parsed) unparsed)))))
 
   (def escape
    (fn (escape-next? ccs pos rec)
@@ -155,14 +166,14 @@
          (parse-state (pp-next-col pos) () cs)
          (add-chunk c (rec nil cs (pp-next pos c) rec))))))))))
 
-  (ps-undo
+  (ps-undo-if-success
    (escape nil (tail cs) (pp-next-col pos) escape)
    (fn (end-pos parsed unparsed)
-   (def s (str parsed))
+    (def s (str parsed))
 
-   (parse-debug pos s)
+    (parse-debug pos s)
 
-   (parse-state end-pos s unparsed)))))
+    (parse-state end-pos s unparsed)))))
 
 (def parse-expr
  (fn (ccs pos rec)
@@ -185,14 +196,16 @@
   (if (nil? p)
    ()
    (ps-undo p
-    (fn (pos parsed unparsed)
+    (fn (pos parsed unparsed error?)
      (parse-debug pos 'parsed top level expr')
 
-     (if parsed
-      (cons parsed (rec unparsed pos rec))
-      (do
-       (err unparsed 'not a top level expr' pos)
-       nil)))))))
+     (if error?
+      nil
+      (if parsed
+       (cons parsed (rec unparsed pos rec))
+       (do
+        (err unparsed 'not a top level expr' pos)
+        nil))))))))
 
 (def parse (fn (source)
  (parse-debug pp-init 'starting parse')

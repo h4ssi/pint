@@ -47,6 +47,8 @@
 
 (def code (parse INPUT))
 
+(if code nil (c-call exit void int 1)) ; todo do not use exit
+
 ; todo pretty print!
 (prln code)
 
