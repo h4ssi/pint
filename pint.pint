@@ -49,8 +49,7 @@
 
 (if code nil (c-call exit void int 1)) ; todo do not use exit
 
-; todo pretty print!
-(prln code)
+(prln (pp code))
 
 (def c (c-call LLVMGetGlobalContext *))
 (def m (c-call LLVMModuleCreateWithNameInContext * * 'real' * c))

@@ -311,6 +311,32 @@
 
  (c-str target)))
 
+(def pp
+ (fn (expr)
+  (def pp-list^
+   (fn (list res pp-rec)
+
+    (def pp-list-inner^
+     (fn (list res pp-rec ppli-rec)
+      (if (empty? list)
+       res
+       (uncons list (fn (h t)
+        (pp-rec h (if (empty? t) res (cons ' ' (ppli-rec t res pp-rec ppli-rec))) pp-rec))))))
+
+    (cons '(' (pp-list-inner^ list (cons ')' res) pp-rec pp-list-inner^))))
+
+  (def pp^
+   (fn (expr res rec)
+    (if (is-list expr)
+     (pp-list^ expr res rec)
+    (if (is-string expr)
+     (cons '\'' (cons expr (cons '\'' res)))
+    (if (is-symbol expr)
+     (cons (symbol-name expr) res)
+     (cons expr res))))))
+
+  (str (pp^ expr () pp^))))
+
 (def quote-fn
  (fn (expr) ; todo this should be a macro, for now its call is hard coded in the reader
 
