@@ -700,6 +700,24 @@
 (def LLVMIntSLT 40) ; signed less than
 (def LLVMIntSLE 41) ; signed less or equal
 
+; LLVMRealPredicate
+(def LLVMRealPredicateFalse 0) ; Always false (always folded)
+(def LLVMRealOEQ 1)            ; True if ordered and equal
+(def LLVMRealOGT 2)            ; True if ordered and greater than
+(def LLVMRealOGE 3)            ; True if ordered and greater than or equal
+(def LLVMRealOLT 4)            ; True if ordered and less than
+(def LLVMRealOLE 5)            ; True if ordered and less than or equal
+(def LLVMRealONE 6)            ; True if ordered and operands are unequal
+(def LLVMRealORD 7)            ; True if ordered (no nans)
+(def LLVMRealUNO 8)            ; True if unordered: isnan(X) | isnan(Y)
+(def LLVMRealUEQ 9)            ; True if unordered or equal
+(def LLVMRealUGT 10)           ; True if unordered or greater than
+(def LLVMRealUGE 11)           ; True if unordered, greater than, or equal
+(def LLVMRealULT 12)           ; True if unordered or less than
+(def LLVMRealULE 13)           ; True if unordered, less than, or equal
+(def LLVMRealUNE 14)           ; True if unordered or not equal
+(def LLVMRealPredicateTrue 15) ; Always true (always folded)
+
 (def tr-if
  (fn (form state tr)
   (if (not (= (list-length form) 4))
@@ -1290,8 +1308,43 @@
 
       nil)))))
 
+    (def s->
+     (built-in-fn s-/ (quote >) 2 (fn (args) (unpair args (fn (l r)
+      (def f (c-call LLVMGetBasicBlockParent * * (c-call LLVMGetInsertBlock * * main-b)))
+
+      (def false-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'ret-false'))
+      (def l-num-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'l-num'))
+      (def r-num-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'r-num'))
+      (def true-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'ret-true'))
+
+      (def l-n (tr-type-test number-type-index l))
+
+      (c-call LLVMBuildCondBr * * main-b * l-n * l-num-bb * false-bb)
+
+      (c-call LLVMPositionBuilderAtEnd void * main-b * l-num-bb)
+
+      (def r-n (tr-type-test number-type-index r))
+
+      (c-call LLVMBuildCondBr * * main-b * r-n * r-num-bb * false-bb)
+
+      (c-call LLVMPositionBuilderAtEnd void * main-b * r-num-bb)
+
+      (def c (c-call LLVMBuildFCmp * * main-b int LLVMRealOGT * (extract-double l 'l-dbl') * (extract-double r 'r-dbl') * 'gt-cmp'))
+
+      (c-call LLVMBuildCondBr * * main-b * c * true-bb * false-bb)
+
+      (c-call LLVMPositionBuilderAtEnd void * main-b * true-bb)
+
+      (c-call LLVMBuildRet * * main-b * l)
+
+      (c-call LLVMPositionBuilderAtEnd void * main-b * false-bb)
+
+      (c-call LLVMBuildRet * * main-b * const-nil)
+
+      nil)))))
+
     (def s-type
-     (built-in-fn s-/ (quote p/type) 1 (fn (args) (uncons args (fn (v _)
+     (built-in-fn s-> (quote p/type) 1 (fn (args) (uncons args (fn (v _)
       (c-call LLVMBuildRet *
        * main-b
        * (build-val number-type-index (c-call LLVMBuildUIToFP *
