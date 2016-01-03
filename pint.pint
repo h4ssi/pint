@@ -388,7 +388,9 @@
    double-type
   (if (= (symbol '*') type)
    pointer-type
-   double-type))))))))))
+  (if (= (symbol '=') type)
+   value-type
+   double-type)))))))))))
 
 (def tr-cast-from-nil-to-c-type
  (fn (type val) (c-call LLVMConstNull * * (tr-c-type type))))
@@ -441,88 +443,92 @@
 
 (def tr-cast-to-c-type ; todo write tests for all combinations!
  (fn (state type val)
-  (def f (c-call LLVMGetBasicBlockParent * * (c-call LLVMGetInsertBlock * * main-b)))
+  (def c-type (tr-c-type type))
+  (if (= c-type value-type)
+   (state-set-cur-value state val)
+   (do ; maybe unwind cases to save some bbs?
+    (def f (c-call LLVMGetBasicBlockParent * * (c-call LLVMGetInsertBlock * * main-b)))
 
-  (def dyn-type (extract-type-index val 'dyn-type'))
-  (def merge-block (c-call LLVMAppendBasicBlockInContext * * c * f * 'merge'))
+    (def dyn-type (extract-type-index val 'dyn-type'))
+    (def merge-block (c-call LLVMAppendBasicBlockInContext * * c * f * 'merge'))
 
-  (def c-pointer-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'c-pointer-cast'))
-  (def switch (c-call LLVMBuildSwitch * * main-b * dyn-type * c-pointer-cast-bb int 6))
+    (def c-pointer-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'c-pointer-cast'))
+    (def switch (c-call LLVMBuildSwitch * * main-b * dyn-type * c-pointer-cast-bb int 6))
 
-  ; cast from nil
-  (def nil-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'nil-cast'))
-  (c-call LLVMAddCase void * switch * nil-type-index * nil-cast-bb)
-  (c-call LLVMPositionBuilderAtEnd void * main-b * nil-cast-bb)
-  (def nil-cast-v (tr-cast-from-nil-to-c-type type val))
-  (c-call LLVMBuildBr * * main-b * merge-block)
+    ; cast from nil
+    (def nil-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'nil-cast'))
+    (c-call LLVMAddCase void * switch * nil-type-index * nil-cast-bb)
+    (c-call LLVMPositionBuilderAtEnd void * main-b * nil-cast-bb)
+    (def nil-cast-v (tr-cast-from-nil-to-c-type type val))
+    (c-call LLVMBuildBr * * main-b * merge-block)
 
-  ; cast from number
-  (def number-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'number-cast'))
-  (c-call LLVMAddCase void * switch * number-type-index * number-cast-bb)
-  (c-call LLVMPositionBuilderAtEnd void * main-b * number-cast-bb)
-  (def number-cast-v (tr-cast-from-number-to-c-type type val))
-  (c-call LLVMBuildBr * * main-b * merge-block)
+    ; cast from number
+    (def number-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'number-cast'))
+    (c-call LLVMAddCase void * switch * number-type-index * number-cast-bb)
+    (c-call LLVMPositionBuilderAtEnd void * main-b * number-cast-bb)
+    (def number-cast-v (tr-cast-from-number-to-c-type type val))
+    (c-call LLVMBuildBr * * main-b * merge-block)
 
-  ; cast from string
-  (def string-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'string-cast'))
-  (c-call LLVMAddCase void * switch * string-type-index * string-cast-bb)
-  (c-call LLVMPositionBuilderAtEnd void * main-b * string-cast-bb)
-  (def string-cast-v (tr-cast-from-string-to-c-type type val))
-  (c-call LLVMBuildBr * * main-b * merge-block)
+    ; cast from string
+    (def string-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'string-cast'))
+    (c-call LLVMAddCase void * switch * string-type-index * string-cast-bb)
+    (c-call LLVMPositionBuilderAtEnd void * main-b * string-cast-bb)
+    (def string-cast-v (tr-cast-from-string-to-c-type type val))
+    (c-call LLVMBuildBr * * main-b * merge-block)
 
-  ; cast from symbol
-  (def symbol-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'symbol-cast'))
-  (c-call LLVMAddCase void * switch * symbol-type-index * symbol-cast-bb)
-  (c-call LLVMPositionBuilderAtEnd void * main-b * symbol-cast-bb)
-  (def symbol-cast-v (tr-cast-from-symbol-to-c-type type val))
-  (c-call LLVMBuildBr * * main-b * merge-block)
+    ; cast from symbol
+    (def symbol-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'symbol-cast'))
+    (c-call LLVMAddCase void * switch * symbol-type-index * symbol-cast-bb)
+    (c-call LLVMPositionBuilderAtEnd void * main-b * symbol-cast-bb)
+    (def symbol-cast-v (tr-cast-from-symbol-to-c-type type val))
+    (c-call LLVMBuildBr * * main-b * merge-block)
 
-  ; cast from list
-  (def list-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'list-cast'))
-  (c-call LLVMAddCase void * switch * list-type-index * list-cast-bb)
-  (c-call LLVMPositionBuilderAtEnd void * main-b * list-cast-bb)
-  (def list-cast-v (tr-cast-from-list-to-c-type type val))
-  (c-call LLVMBuildBr * * main-b * merge-block)
-  
-  ; cast from function
-  (def function-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'function-cast'))
-  (c-call LLVMAddCase void * switch * function-type-index * function-cast-bb)
-  (c-call LLVMPositionBuilderAtEnd void * main-b * function-cast-bb)
-  (def function-cast-v (tr-cast-from-function-to-c-type type val))
-  (c-call LLVMBuildBr * * main-b * merge-block)
+    ; cast from list
+    (def list-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'list-cast'))
+    (c-call LLVMAddCase void * switch * list-type-index * list-cast-bb)
+    (c-call LLVMPositionBuilderAtEnd void * main-b * list-cast-bb)
+    (def list-cast-v (tr-cast-from-list-to-c-type type val))
+    (c-call LLVMBuildBr * * main-b * merge-block)
 
-  ; default must be cast from c-pointer
-  (c-call LLVMPositionBuilderAtEnd void * main-b * c-pointer-cast-bb)
-  (def c-pointer-cast-v (tr-cast-from-c-pointer-to-c-type type val))
-  (c-call LLVMBuildBr * * main-b * merge-block)
-  
-  (c-call LLVMPositionBuilderAtEnd void * main-b * merge-block)
+    ; cast from function
+    (def function-cast-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'function-cast'))
+    (c-call LLVMAddCase void * switch * function-type-index * function-cast-bb)
+    (c-call LLVMPositionBuilderAtEnd void * main-b * function-cast-bb)
+    (def function-cast-v (tr-cast-from-function-to-c-type type val))
+    (c-call LLVMBuildBr * * main-b * merge-block)
 
-  (def phi (c-call LLVMBuildPhi * * main-b * (tr-c-type type) * 'c-value'))
+    ; default must be cast from c-pointer
+    (c-call LLVMPositionBuilderAtEnd void * main-b * c-pointer-cast-bb)
+    (def c-pointer-cast-v (tr-cast-from-c-pointer-to-c-type type val))
+    (c-call LLVMBuildBr * * main-b * merge-block)
 
-  (c-call LLVMAddIncoming void
-   * phi
-   * (c-ptr-array
-      (cons nil-cast-v
-      (cons number-cast-v
-      (cons string-cast-v
-      (cons symbol-cast-v
-      (cons list-cast-v
-      (cons function-cast-v
-      (cons c-pointer-cast-v ()))))))))
-   * (c-ptr-array
-      (cons nil-cast-bb
-      (cons number-cast-bb
-      (cons string-cast-bb
-      (cons symbol-cast-bb
-      (cons list-cast-bb
-      (cons function-cast-bb
-      (cons c-pointer-cast-bb ()))))))))
-   int 7)
+    (c-call LLVMPositionBuilderAtEnd void * main-b * merge-block)
 
-  (state-set-bb
-   (state-set-cur-value state phi)
-   merge-block)))
+    (def phi (c-call LLVMBuildPhi * * main-b * (tr-c-type type) * 'c-value'))
+
+    (c-call LLVMAddIncoming void
+     * phi
+     * (c-ptr-array
+        (cons nil-cast-v
+        (cons number-cast-v
+        (cons string-cast-v
+        (cons symbol-cast-v
+        (cons list-cast-v
+        (cons function-cast-v
+        (cons c-pointer-cast-v ()))))))))
+     * (c-ptr-array
+        (cons nil-cast-bb
+        (cons number-cast-bb
+        (cons string-cast-bb
+        (cons symbol-cast-bb
+        (cons list-cast-bb
+        (cons function-cast-bb
+        (cons c-pointer-cast-bb ()))))))))
+     int 7)
+
+    (state-set-bb
+     (state-set-cur-value state phi)
+     merge-block)))))
 
 (def build-val
  (fn (type-id val)
@@ -548,6 +554,8 @@
 
   (def label (str (cons 'cast-' (cons (symbol-name type) ()))))
 
+  (if (= c-type value-type)
+   val
   (if (= kind LLVMPointerTypeKind)
    (build-val c-pointer-type-index (c-call LLVMBuildPtrToInt * * main-b * val * i64-type * 'ptr-to-int'))
   (if (= kind LLVMIntegerTypeKind)
@@ -567,7 +575,7 @@
        (= kind LLVMFP128TypeKind)
        (= kind LLVMPPC_FP128TypeKind)))
    (build-val number-type-index (c-call LLVMBuildFPTrunc * * main-b * val * double-type * label))
-   (c-call LLVMConstNull * * value-type)))))))) ; todo handle non numeric, non pointer types (are there any?)
+   (c-call LLVMConstNull * * value-type))))))))) ; todo handle non numeric, non pointer types (are there any?)
 
 (def tr-c-fn-type
  (fn (ret-type arg-types)
