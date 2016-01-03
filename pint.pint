@@ -261,16 +261,16 @@
 
 (def tr-nil (fn (state) (state-set-cur-value state const-nil)))
 
-(def tr-number (fn (number state)
+(def tr-number (fn (b number state)
   (state-set-cur-value state
    (c-call LLVMConstNamedStruct *
      * value-type
      * (c-ptr-array
          (cons number-type-index
-         (cons (c-call LLVMBuildBitCast * * main-b * (c-call LLVMConstReal * * double-type double number) * i64-type * 'pack-dbl') ())))
+         (cons (c-call LLVMBuildBitCast * * b * (c-call LLVMConstReal * * double-type double number) * i64-type * 'pack-dbl') ())))
      int 2))))
 
-(def tr-default (fn (state) (tr-number 1337 state))) ; todo raise error
+(def tr-default (fn (state) (tr-number main-b 1337 state))) ; todo raise error
 
 (def tr-string (fn (string state)
  (def strval
@@ -785,22 +785,22 @@
    (c-call LLVMFunctionType * * value-type * arg-t-array int (+ num-args 1) int 0)))
 
 (def gen-fn
- (fn (num-args gen-body)
+ (fn (module b num-args gen-body)
   (def fn-t (get-fn-type num-args))
 
-  (def f (c-call LLVMAddFunction * * m * '' * fn-t))
+  (def f (c-call LLVMAddFunction * * module * '' * fn-t))
 
-  (def prev (c-call LLVMGetInsertBlock * * main-b))
+  (def prev (c-call LLVMGetInsertBlock * * b))
 
   (def bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'entry'))
-  (c-call LLVMPositionBuilderAtEnd void * main-b * bb)
+  (c-call LLVMPositionBuilderAtEnd void * b * bb)
 
   (def frame-reg (c-call LLVMGetParam * * f int 0))
   (def arg-regs (map (fn (i) (c-call LLVMGetParam * * f int (+ i 1))) (range num-args)))
 
   (def ret (gen-body frame-reg arg-regs bb))
 
-  (c-call LLVMPositionBuilderAtEnd void * main-b * prev)
+  (c-call LLVMPositionBuilderAtEnd void * b * prev)
 
   (pair f ret)))
 
@@ -849,7 +849,7 @@
    (def num-args (list-length args))
 
    (unpair
-    (gen-fn num-args
+    (gen-fn m main-b num-args
      (fn (frame-reg arg-regs bb)
       (def local-state (state-branch-borrow state bb))
 
@@ -868,6 +868,40 @@
     (fn (f local-state^^)
      (def state^ (state-merge local-state^^))
      (gen-fn-frame state^ f (state-borrow-list local-state^^))))))))
+
+; macro poc
+(def macro ((fn ()
+ (def mm (c-call LLVMModuleCreateWithNameInContext * * 'other' * c))
+
+ (def mf-type (c-call LLVMFunctionType * * i32-type * (c-ptr-array ()) int 0 int 0))
+ (def m-f (c-call LLVMAddFunction * * mm * 'dummy' * mf-type))
+
+ (def m-bb (c-call LLVMAppendBasicBlockInContext * * c * m-f * 'entry'))
+ (def m-b (c-call LLVMCreateBuilder *))
+ (c-call LLVMPositionBuilderAtEnd void * m-b * m-bb)
+ (c-call LLVMBuildRet * * m-b * (i32-const 0))
+
+ (unpair (gen-fn mm m-b 1
+  (fn (frame-reg arg-regs bb)
+   (c-call LLVMBuildRet * * m-b * (head arg-regs))))
+  (fn (f _)
+   (c-call LLVMLinkInMCJIT void)
+   (c-call ExternLLVMInitializeNativeTarget void) ; todo inlining does not work :/
+   (c-call ExternLLVMInitializeNativeAsmPrinter void)
+
+   (def ee (c-array * 1))
+   (def err (c-array * 1))
+
+   (if (= 0 (c-call LLVMCreateJITCompilerForModule int * ee * mm int 0 * err))
+    (do
+     ;(c-call LLVMDumpModule void * mm)
+     (c-call LLVMGetPointerToGlobal * * (c-get * ee) * f))
+    (prln (c-str (c-get * err)))))))))
+
+(def tr-macro-poc
+ (fn (state tr)
+  (def num (c-call * macro = * nil = 1234))
+  (tr (cons num ()) state tr)))
 
 (def tr-def-local
  (fn (name state)
@@ -1116,7 +1150,10 @@
    (if (= (symbol 'quote') (head form))
      (tr (cons (quote-fn (head (tail form))) ()) state tr)
 
-   (tr-call form state tr)))))))))))))))
+   (if (= (symbol 'macro-poc') (head form))
+     (tr-macro-poc state tr)
+
+   (tr-call form state tr))))))))))))))))
 
 (def tr-type-test
  (fn (type-index val)
@@ -1133,7 +1170,7 @@
 
     (def built-in-fn
      (fn (state name num-args body)
-      (def f (fst (gen-fn num-args (fn (frame args bb) (body args)))))
+      (def f (fst (gen-fn m main-b num-args (fn (frame args bb) (body args)))))
       (def f-val (state-cur-value (gen-fn-frame state f ())))
       (state-add-local state name f-val)))
 
@@ -1431,7 +1468,7 @@
             (if (is-string h)
              (tr-string h state)
             (if (is-number h)
-             (tr-number h state)
+             (tr-number main-b h state)
             (if (is-symbol h)
              (tr-load h state)
              (tr-default state)))))) ; todo other options
