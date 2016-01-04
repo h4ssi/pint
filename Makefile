@@ -6,9 +6,6 @@ all: pint-dev
 pint: bootstrap.sh
 	./bootstrap.sh
 
-extern.o: extern.cc
-	clang++ -std=c++14 -c extern.cc $(shell llvm-config --cflags)
-
 helloworld: helloworld.pint $(pint_deps)
 	echo -n helloworld | ./build-pint
 
@@ -30,8 +27,8 @@ pint-dev.ll: pint pint.pint std.pint parser.pint io.pint includer-hack
 pint-dev.s: pint-dev.ll
 	llc pint-dev.ll
 
-pint-dev: pint-dev.s extern.o
-	clang++ pint-dev.s extern.o $(shell llvm-config --ldflags --system-libs --libs engine) -o pint-dev
+pint-dev: pint-dev.s
+	clang++ pint-dev.s $(shell llvm-config --ldflags --system-libs --libs engine) -o pint-dev
 
 build-pint.ll: pint build-pint.pint includer-hack pint.pint std.pint io.pint
 	echo -n build-pint.pint | ./includer-hack | ./pint
@@ -50,11 +47,11 @@ poc.ll: pint includer-hack poc.pint
 poc.s: poc.ll
 	llc poc.ll
 
-poc: poc.s extern.o
-	clang++ poc.s extern.o $(shell llvm-config --ldflags --system-libs --libs engine) -o poc
+poc: poc.s
+	clang++ poc.s $(shell llvm-config --ldflags --system-libs --libs engine) -o poc
 
 clean:
-	rm -f extern.o helloworld{,.s,.ll} includer-hack{,.s,.ll} pint-dev{,.s,.ll} build-pint{,.s,.ll} poc{,.s,.ll}
+	rm -f helloworld{,.s,.ll} includer-hack{,.s,.ll} pint-dev{,.s,.ll} build-pint{,.s,.ll} poc{,.s,.ll}
 
 clean-bootstrap: clean
 	rm -f pint

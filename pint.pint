@@ -886,8 +886,10 @@
    (c-call LLVMBuildRet * * m-b * (head arg-regs))))
   (fn (f _)
    (c-call LLVMLinkInMCJIT void)
-   (c-call ExternLLVMInitializeNativeTarget void) ; todo inlining does not work :/
-   (c-call ExternLLVMInitializeNativeAsmPrinter void)
+   (c-call LLVMInitializeX86TargetInfo void) ; todo support multiple targets
+   (c-call LLVMInitializeX86Target void)
+   (c-call LLVMInitializeX86TargetMC void)
+   (c-call LLVMInitializeX86AsmPrinter void)
 
    (def ee (c-array * 1))
    (def err (c-array * 1))

@@ -49,8 +49,10 @@
     (prln (c-str (ref-deref err))))
 
 (c-call LLVMLinkInMCJIT void)
-(c-call ExternLLVMInitializeNativeTarget void) ; todo inlining does not work :/
-(c-call ExternLLVMInitializeNativeAsmPrinter void)
+(c-call LLVMInitializeX86TargetInfo void) ; todo support multiple targets
+(c-call LLVMInitializeX86Target void)
+(c-call LLVMInitializeX86TargetMC void)
+(c-call LLVMInitializeX86AsmPrinter void)
 
 (def glbl (c-call LLVMAddGlobal * * m * i * 'global'))
 (c-call LLVMSetInitializer void * glbl * (c-call LLVMConstNull * * i))
