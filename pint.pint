@@ -140,6 +140,7 @@
 (def state-set-bb (fn (s bb) (state-unmake s (fn (cv bb^ pt ba st bs gl)
                              (state-make cv bb pt ba st bs gl)))))
 
+(def state-module (fn (s) (c-call LLVMGetGlobalParent * * (c-call LLVMGetBasicBlockParent * * (state-bb s)))))
 
 (def state-get-global (fn (s key) (state-unmake s (fn (cv bb pt ba st bs gl) (getk gl key)))))
 (def state-add-global (fn (s key val) (state-unmake s (fn (cv bb pt ba st bs gl)
@@ -281,7 +282,7 @@
     int 1)) ; do not zero terminate
  (def strmem
    (c-call LLVMAddGlobal *
-    * m
+    * (state-module state)
     * (c-call LLVMTypeOf * * strval)
     * ''))
  (c-call LLVMSetGlobalConstant void * strmem int 1)
@@ -588,13 +589,13 @@
   (c-call LLVMFunctionType * * ret-c-type * arg-t-array int num-args int 0)))
 
 (def tr-declare-c-fn
- (fn (name ret-type arg-types)
-  (c-call LLVMAddFunction * * m * (symbol-name name) * (tr-c-fn-type ret-type arg-types))))
+ (fn (module name ret-type arg-types)
+  (c-call LLVMAddFunction * * module * (symbol-name name) * (tr-c-fn-type ret-type arg-types))))
 
 (def tr-declare-c-var
- (fn (name)
+ (fn (module name)
   (debug (str (cons 'declaring glb var: ' (cons (symbol-name name) ()))))
-  (c-call LLVMAddGlobal * * m * pointer-type * (symbol-name name))))
+  (c-call LLVMAddGlobal * * module * pointer-type * (symbol-name name))))
 
 (def state-add-global-tagged (fn (state key tag thing)
  (state-add-global state key (pair tag thing))))
@@ -603,10 +604,10 @@
 (def c-var-tag 'c-var')
 
 (def state-add-global-fn (fn (state fn-name ret-type arg-types)
- (state-add-global-tagged state fn-name c-fn-tag (tr-declare-c-fn fn-name ret-type arg-types))))
+ (state-add-global-tagged state fn-name c-fn-tag (tr-declare-c-fn (state-module state) fn-name ret-type arg-types))))
 
 (def state-add-global-var (fn (state var-name)
- (state-add-global-tagged state var-name c-var-tag (tr-declare-c-var var-name))))
+ (state-add-global-tagged state var-name c-var-tag (tr-declare-c-var (state-module state) var-name))))
 
 (def tr-c-call
  (fn (form state tr)
@@ -849,7 +850,7 @@
    (def num-args (list-length args))
 
    (unpair
-    (gen-fn m num-args
+    (gen-fn (state-module state) num-args
      (fn (frame-reg arg-regs bb)
       (def local-state (state-branch-borrow state bb))
 
@@ -920,7 +921,7 @@
      (if (state-get-global state name)
        state
        (do
-         (def var (c-call LLVMAddGlobal * * m * value-type * (symbol-name name)))
+         (def var (c-call LLVMAddGlobal * * (state-module state) * value-type * (symbol-name name)))
          (c-call LLVMSetInitializer void * var *
           (if (= 0 (c-call LLVMIsConstant int * val))
            (c-call LLVMConstNull * * value-type)
@@ -1174,7 +1175,7 @@
 
     (def built-in-fn
      (fn (state name num-args body)
-      (def f (fst (gen-fn m num-args (fn (frame args bb) (body args)))))
+      (def f (fst (gen-fn (state-module state) num-args (fn (frame args bb) (body args)))))
       (def f-val (state-cur-value (gen-fn-frame state f ())))
       (state-add-local state name f-val)))
 
