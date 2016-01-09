@@ -1174,46 +1174,57 @@
   s-symbol-name))
 
 ; macro poc
-(def macro ((fn ()
+(def tr-macro (fn (form state tr)
+ (debug 'defining macro')
+
  (def mm (c-call LLVMModuleCreateWithNameInContext * * 'other' * c))
 
- (def mf-type (c-call LLVMFunctionType * * i32-type * (c-ptr-array ()) int 0 int 0))
- (def m-f (c-call LLVMAddFunction * * mm * 'dummy' * mf-type))
+ (def mf-type (c-call LLVMFunctionType * * value-type * (c-ptr-array ()) int 0 int 0))
+ (def m-f (c-call LLVMAddFunction * * mm * 'name-needed' * mf-type)) ; name is needed for GetPointerToGlobal to work?
 
  (def m-bb (c-call LLVMAppendBasicBlockInContext * * c * m-f * 'entry'))
 
  (def prev (c-call LLVMGetInsertBlock * * main-b))
  (c-call LLVMPositionBuilderAtEnd void * main-b * m-bb)
 
+
  (def macro-state (built-ins (init-state m-bb)))
- (c-call LLVMBuildRet * * main-b * (i32-const 0))
+ (def macro-state^ (tr-fn form macro-state tr))
+ (c-call LLVMBuildRet * * main-b * (state-cur-value macro-state^))
 
- (unpair (gen-fn mm 1
-  (fn (frame-reg arg-regs bb)
-   (c-call LLVMBuildRet * * main-b * (head arg-regs))))
-  (fn (f _)
-   (c-call LLVMSetValueName void * f * 'name-needed') ; name is needed for GetPointerToGlobal to work?
-   (c-call LLVMPositionBuilderAtEnd void * main-b * prev)
+ (c-call LLVMPositionBuilderAtEnd void * main-b * prev)
 
-   (c-call LLVMLinkInMCJIT void)
-   (c-call LLVMInitializeX86TargetInfo void) ; todo support multiple targets
-   (c-call LLVMInitializeX86Target void)
-   (c-call LLVMInitializeX86TargetMC void)
-   (c-call LLVMInitializeX86AsmPrinter void)
+ (debug 'macro jit code-gen complete')
 
-   (def ee (c-array * 1))
-   (def err (c-array * 1))
+ (c-call LLVMLinkInMCJIT void)
+ (c-call LLVMInitializeX86TargetInfo void) ; todo support multiple targets
+ (c-call LLVMInitializeX86Target void)
+ (c-call LLVMInitializeX86TargetMC void)
+ (c-call LLVMInitializeX86AsmPrinter void)
 
-   (if (= 0 (c-call LLVMCreateJITCompilerForModule int * ee * mm int 0 * err))
-    (do
-     ;(c-call LLVMDumpModule void * mm)
-     (c-call LLVMGetPointerToGlobal * * (c-get * ee) * f)) ; this fn is deprecated for mcjit
-    (prln (c-str (c-get * err)))))))))
+ (def ee (c-array * 1))
+ (def err (c-array * 1))
+
+ (if (= 0 (c-call LLVMCreateJITCompilerForModule int * ee * mm int 0 * err))
+  (do
+   (debug 'macro compilation done')
+   ;(c-call LLVMDumpModule void * mm)
+   (def macro (c-call * (c-call LLVMGetPointerToGlobal * * (c-get * ee) * m-f) =)) ; this fn is deprecated for mcjit
+
+   (debug 'reference to macro obtained')
+
+   (state-add-global state 'POCMACRO' macro)) ; todo store macros correctly
+  (prln (c-str (c-get * err))))))
 
 (def tr-macro-poc
- (fn (state tr)
-  (def num (c-call * macro = * nil = 1234))
-  (tr (cons num ()) state tr)))
+ (fn (form state tr)
+  (debug 'expanding macro...')
+
+  (def code ((state-get-global state 'POCMACRO') (tail form)))
+
+  (debug (str (cons 'expanded macro: ' (cons (pp code) ()))))
+
+  (tr code state tr)))
 
 (def tr-def-local
  (fn (name state)
@@ -1462,10 +1473,13 @@
    (if (= (symbol 'quote') (head form))
      (tr (cons (quote-fn (head (tail form))) ()) state tr)
 
-   (if (= (symbol 'macro-poc') (head form))
-     (tr-macro-poc state tr)
+   (if (= (symbol 'macro') (head form))
+     (tr-macro form state tr)
 
-   (tr-call form state tr))))))))))))))))
+   (if (= (symbol 'macro-poc') (head form))
+     (tr-macro-poc form state tr)
+
+   (tr-call form state tr)))))))))))))))))
 
 
 (def tr
