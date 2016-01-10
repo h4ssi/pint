@@ -79,6 +79,9 @@
  int 2
  int 0)
 
+(def frame-type-sized (fn (size)
+ (c-call LLVMStructTypeInContext * * c * (c-ptr-array (cons pointer-type (cons (c-call LLVMArrayType * * value-type int size) ()))) int 2 int 0)))
+
 (def frame-ptr-type (c-call LLVMPointerType * * frame-type int 0))
 
 (def main-f-type (c-call LLVMFunctionType * * i32-type * (c-ptr-array ()) int 0 int 0))
@@ -805,6 +808,43 @@
 
   (pair f ret)))
 
+(def gen-fn-frame-global
+ (fn (state f borrowed-vars)
+  (info (str (cons 'assembling closure frame (global): ' (cons borrowed-vars ()))))
+  (def borrowed-vars-num (list-length borrowed-vars))
+
+  (def type (frame-type-sized borrowed-vars-num))
+
+  (def st-brws (stap (fn (st var) ; todo extraction here not tested
+                      (def st^ (tr-load var st))
+                      (pair st^ (state-cur-value st^)))
+                     state
+                     borrowed-vars))
+
+  (unpair st-brws (fn (state^ borrowed-vals)
+   (def initializer
+    (c-call LLVMConstStructInContext *
+     * c
+     * (c-ptr-array
+        (cons (c-call LLVMBuildBitCast * * main-b * f * pointer-type * 'cast-f-to-f-tpr')
+        (cons (c-call LLVMConstArray *
+               * value-type
+               * (c-ptr-array borrowed-vals)
+               uint borrowed-vars-num) ())))
+     uint 2
+     int 0))
+
+   (def frame-glb (c-call LLVMAddGlobal * * (state-module state^) * type * ''))
+   (c-call LLVMSetInitializer void * frame-glb * initializer)
+
+   (def fn-glb (c-call LLVMAddGlobal * * (state-module state^) * value-type * ''))
+   (c-call LLVMSetInitializer void * fn-glb * (c-call LLVMConstNamedStruct *
+                                               * value-type
+                                               * (c-ptr-array (cons function-type-index (cons (c-call LLVMConstPtrToInt * * frame-glb * i64-type) ())))
+                                               uint 2))
+
+   (state-set-cur-value state^ fn-glb)))))
+
 (def gen-fn-frame
  (fn (state f borrowed-vars)
    (info (str (cons 'assembling closure frame: ' (cons borrowed-vars ()))))
@@ -887,6 +927,7 @@
    (fn (state name num-args body)
     (def f (fst (gen-fn (state-module state) num-args (fn (frame args bb) (body args)))))
     (def f-val (state-cur-value (gen-fn-frame state f ())))
+    (def f-val-glb (gen-fn-frame-global state f ())) ; todo builtins as globals, not on heap
     (state-add-local state name f-val)))
 
   (def s-cons
