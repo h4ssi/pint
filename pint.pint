@@ -926,8 +926,8 @@
   (def built-in-fn
    (fn (state name num-args body)
     (def f (fst (gen-fn (state-module state) num-args (fn (frame args bb) (body args)))))
-    (def f-val (state-cur-value (gen-fn-frame state f ())))
-    (def f-val-glb (gen-fn-frame-global state f ())) ; todo builtins as globals, not on heap
+    (def f-val-glb (gen-fn-frame-global state f ())) ; todo builtins as globals, they are loaded on the heap, which is not strictly necessary
+    (def f-val (c-call LLVMBuildLoad * * main-b * (state-cur-value f-val-glb) * (str (cons 'built-in-' (cons (symbol-name name) ())))))
     (state-add-local state name f-val)))
 
   (def s-cons
