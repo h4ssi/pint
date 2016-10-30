@@ -53,7 +53,6 @@
 (prln (pp code))
 
 (def c (c-call LLVMGetGlobalContext *))
-(def m (c-call LLVMModuleCreateWithNameInContext * * 'real' * c))
 
 (def void-type (c-call LLVMVoidTypeInContext * * c))
 (def i8-type (c-call LLVMInt8TypeInContext * * c))
@@ -85,11 +84,13 @@
 
 (def frame-ptr-type (c-call LLVMPointerType * * frame-type int 0))
 
-(def main-f-type (c-call LLVMFunctionType * * i32-type * (c-ptr-array ()) int 0 int 0))
-(def main-f (c-call LLVMAddFunction * * m * 'main' * main-f-type))
-(def main-bb (c-call LLVMAppendBasicBlockInContext * * c * main-f * 'entry'))
 (def main-b (c-call LLVMCreateBuilder *))
-(c-call LLVMPositionBuilderAtEnd void * main-b * main-bb)
+
+(def create-module (fn (ret-type name)
+  (def main-f-type (c-call LLVMFunctionType * * ret-type * (c-ptr-array ()) int 0 int 0))
+  (def m (c-call LLVMModuleCreateWithNameInContext * * name * c))
+  (def main-f (c-call LLVMAddFunction * * m * name * main-f-type))
+  (c-call LLVMAppendBasicBlockInContext * * c * main-f * 'entry')))
 
 ; state during code gen
 ; contains
@@ -144,7 +145,8 @@
 (def state-set-bb (fn (s bb) (state-unmake s (fn (cv bb^ pt ba st bs gl)
                              (state-make cv bb pt ba st bs gl)))))
 
-(def state-module (fn (s) (c-call LLVMGetGlobalParent * * (c-call LLVMGetBasicBlockParent * * (state-bb s)))))
+(def state-fn (fn (s) (c-call LLVMGetBasicBlockParent * * (state-bb s))))
+(def state-module (fn (s) (c-call LLVMGetGlobalParent * * (state-fn s))))
 
 (def state-get-global (fn (s key) (state-unmake s (fn (cv bb pt ba st bs gl) (getk gl key)))))
 (def state-add-global (fn (s key val) (state-unmake s (fn (cv bb pt ba st bs gl)
@@ -1219,16 +1221,10 @@
 (def tr-macro (fn (form state tr)
  (debug 'defining macro')
 
- (def mm (c-call LLVMModuleCreateWithNameInContext * * 'other' * c))
-
- (def mf-type (c-call LLVMFunctionType * * value-type * (c-ptr-array ()) int 0 int 0))
- (def m-f (c-call LLVMAddFunction * * mm * 'name-needed' * mf-type)) ; name is needed for GetPointerToGlobal to work?
-
- (def m-bb (c-call LLVMAppendBasicBlockInContext * * c * m-f * 'entry'))
+ (def m-bb (create-module value-type 'POCMACRO'))
 
  (def prev (c-call LLVMGetInsertBlock * * main-b))
  (c-call LLVMPositionBuilderAtEnd void * main-b * m-bb)
-
 
  (def macro-state (built-ins (init-state m-bb)))
  (def macro-state^ (tr-fn form macro-state tr))
@@ -1247,11 +1243,11 @@
  (def ee (c-array * 1))
  (def err (c-array * 1))
 
- (if (= 0 (c-call LLVMCreateJITCompilerForModule int * ee * mm int 0 * err))
+ (if (= 0 (c-call LLVMCreateJITCompilerForModule int * ee * (state-module macro-state) int 0 * err))
   (do
    (debug 'macro compilation done')
-   ;(c-call LLVMDumpModule void * mm)
-   (def macro (c-call * (c-call LLVMGetPointerToGlobal * * (c-get * ee) * m-f) =)) ; this fn is deprecated for mcjit
+   ;(c-call LLVMDumpModule void * (state-module macro-state))
+   (def macro (c-call * (c-call LLVMGetPointerToGlobal * * (c-get * ee) * (state-fn macro-state)) =)) ; this fn is deprecated for mcjit
 
    (debug 'reference to macro obtained')
 
@@ -1527,6 +1523,9 @@
 
 (def tr
   (fn (code)
+    (def main-bb (create-module i32-type 'main'))
+    (c-call LLVMPositionBuilderAtEnd void * main-b * main-bb)
+
     (def s (built-ins (init-state main-bb)))
 
     (def tr^ (fn (c state rec)
@@ -1546,7 +1545,8 @@
          (rec t state rec)
        ) (head c) (tail c)))))
 
-    (def exit-code (state-cur-value (tr^ code s tr^)))
+    (def exit-state (tr^ code s tr^))
+    (def exit-code (state-cur-value exit-state))
 
     (c-call LLVMBuildRet *
      * main-b
@@ -1563,9 +1563,12 @@
            * (extract-value exit-code 'exit-code-i64')
            * i32-type
            * 'exit-code-i32')
-        * 'exit-code'))))
+        * 'exit-code'))
 
-(tr code)
+    exit-state))
+
+(def m (state-module (tr code)))
+
 (c-call LLVMDisposeBuilder void * main-b)
 
 (info 'translation to llvm module done')
