@@ -26,6 +26,7 @@
 ' ()))))))
 
 (def log (fn (lvl msg) (prln (str (cons '[' (cons lvl (cons '] ' (cons msg ()))))))))
+(def trace (fn (msg) (log 'T' msg)))
 (def debug (fn (msg) (log 'D' msg)))
 (def info (fn (msg) (log 'I' msg)))
 (def warn (fn (msg) (log 'W' msg)))
@@ -323,7 +324,7 @@
   (if s^
    (do
     (def index (indexof sym (state-borrow-list s^)))
-    (info (str (cons (symbol-name sym) (cons ' borrow index: ' (cons index ())))))
+    (trace (str (cons (symbol-name sym) (cons ' borrow index: ' (cons index ())))))
     (def val-loc (c-call LLVMBuildInBoundsGEP *
                   * main-b
                   * (state-get-local s^ '')
@@ -810,7 +811,7 @@
 
 (def gen-fn-frame-global
  (fn (state f borrowed-vars)
-  (info (str (cons 'assembling closure frame (global): ' (cons borrowed-vars ()))))
+  (trace (str (cons 'assembling closure frame (global): ' (cons borrowed-vars ()))))
   (def borrowed-vars-num (list-length borrowed-vars))
 
   (def type (frame-type-sized borrowed-vars-num))
@@ -847,7 +848,7 @@
 
 (def gen-fn-frame
  (fn (state f borrowed-vars)
-   (info (str (cons 'assembling closure frame: ' (cons borrowed-vars ()))))
+   (trace (str (cons 'assembling closure frame: ' (cons borrowed-vars ()))))
    (def borrowed-vars-num (list-length borrowed-vars))
    (def frame-size (+ 8 (* 16 borrowed-vars-num)))
    (def frame-mem (c-call LLVMBuildCall *
@@ -876,7 +877,7 @@
               st^)))
             state
             (zip (range borrowed-vars-num) borrowed-vars)))
-   (info 'done')
+   (trace 'done')
 
    (def func-pointer (c-call LLVMBuildPtrToInt * * main-b * frame * i64-type * 'pack-closure'))
 
@@ -1301,6 +1302,7 @@
 (def tr-def
  (fn (form state tr)
   (def name (head (tail form)))
+  (info (str (cons 'processing definition of ' (cons (symbol-name name) ()))))
 
   (def build (fn ()
    (def val (head (tail (tail form))))
@@ -1564,6 +1566,10 @@
         * 'exit-code'))))
 
 (tr code)
+(c-call LLVMDisposeBuilder void * main-b)
+
+(info 'translation to llvm module done')
+(info 'verifying module...')
 
 (def LLVMAbortProcessAction 0)
 (def LLVMPrintMessageAction 1)
@@ -1575,15 +1581,17 @@
 
 (def err (ref-build))
 
-(if (= 0 (c-call LLVMVerifyModule int * m int LLVMPrintMessageAction * (ref-ref err)))
-    nil
-    (prln (c-str (ref-deref err))))
+(if (not (= 0 (c-call LLVMVerifyModule int * m int LLVMPrintMessageAction * (ref-ref err))))
+  (prln (c-str (ref-deref err)))
+  (do
+    (info 'verified successfully')
 
-(c-call LLVMDisposeBuilder void * main-b)
+    (info 'ouputting llvm code...')
+    (prln '')
 
-(prln '')
-
-(c-call LLVMDumpModule void * m)
-(if (= 0 (c-call LLVMPrintModuleToFile int * m * 'out.ll' * (ref-ref err)))
-    nil
-    (prln (ref-deref err)))
+    (c-call LLVMDumpModule void * m)
+    (if (not (= 0 (c-call LLVMPrintModuleToFile int * m * 'out.ll' * (ref-ref err))))
+      (prln (ref-deref err))
+      (do
+        (info 'out.ll written')
+        0))))
