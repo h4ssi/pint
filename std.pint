@@ -55,6 +55,8 @@
 
  (=^ a b =^)))
 
+(def c-nil? (fn (w) (= w c-nil)))
+
 (def substr (fn (string start len)
  (def s-ptr (c-call memset * * string int 0 uint 0)) ; convert to ptr
 

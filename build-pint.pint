@@ -2,25 +2,29 @@
 (include std)
 (include io)
 
-(def target (slurp-stdin))
-(def target-pint (str (cons target (cons '.pint' ()))))
-(def target-ll (str (cons target (cons '.ll' ()))))
-(def target-s (str (cons target (cons '.s' ()))))
+(def dynamic (fn (x) x)) ; hack to keep old parser able to compile itself ; todo remove once macros are fully implemented
 
-(def sys (fn (cmd)
- (c-call puts int * cmd)
- (c-call system int * cmd)))
+(dynamic (do
+ (def target (slurp-stdin))
+ (def target-pint (str (cons target (cons '.pint' ()))))
+ (def target-ll (str (cons target (cons '.ll' ()))))
+ (def target-s (str (cons target (cons '.s' ()))))
 
-(def h (sys (str (cons 'echo -n ' (cons target-pint (cons ' | ./includer-hack | ./pint' ()))))))
-(if (p/ident h 0)
- (do
-  (def m (sys (str (cons 'mv out.ll ' (cons target-ll ())))))
-  (if (p/ident m 0)
-   (do
-    (def c (sys (str (cons 'llc ' (cons target-ll ())))))
-    (if (p/ident c 0)
-     (sys (str (cons 'clang ' (cons target-s (cons ' -o ' (cons target ()))))))
-     c))
-   m))
- h)
+ (def sys (fn (cmd)
+  (c-call puts int * cmd)
+  (c-call system int * cmd)))
+
+ (def h (sys (str (cons 'echo -n ' (cons target-pint (cons ' | ./includer-hack | ./pint' ()))))))
+
+ (if (p/ident h 0)
+  (do
+   (def m (sys (str (cons 'mv out.ll ' (cons target-ll ())))))
+   (if (p/ident m 0)
+    (do
+     (def c (sys (str (cons 'llc ' (cons target-ll ())))))
+     (if (p/ident c 0)
+      (sys (str (cons 'clang ' (cons target-s (cons ' -o ' (cons target ()))))))
+      c))
+    m))
+  h)))
 

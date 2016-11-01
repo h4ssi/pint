@@ -42,16 +42,6 @@
    (zip (range l) ptr-list))
   array))
 
-(include parser)
-
-(def INPUT (slurp-stdin))
-
-(def code (parse INPUT))
-
-(if code nil (c-call exit void int 1)) ; todo do not use exit
-
-(prln (pp code))
-
 (def c (c-call LLVMGetGlobalContext *))
 
 (def void-type (c-call LLVMVoidTypeInContext * * c))
@@ -155,6 +145,8 @@
 (def state-get-local (fn (s key) (state-unmake s (fn (cv bb pt ba st bs gl) (getk st key)))))
 (def state-add-local (fn (s key val) (state-unmake s (fn (cv bb pt ba st bs gl)
                                      (state-make cv bb pt ba (assoc st key val) bs gl)))))
+(def state-clear-locals (fn (s) (state-unmake s (fn (cv bb pt ba st bs gl)
+                                (state-make cv bb pt ba () bs gl)))))
 
 (def state-borrow (fn (s sym)
  (def sb^ (fn (c rec)
@@ -319,45 +311,6 @@
        (cons list-type-index
        (cons (c-call LLVMConstNull * * i64-type) ())))
     int 2))))
-
-(def tr-load-from-borrow
- (fn (sym state)
-  (def s^ (state-borrow state sym))
-  (if s^
-   (do
-    (def index (indexof sym (state-borrow-list s^)))
-    (trace (str (cons (symbol-name sym) (cons ' borrow index: ' (cons index ())))))
-    (def val-loc (c-call LLVMBuildInBoundsGEP *
-                  * main-b
-                  * (state-get-local s^ '')
-                  * (c-ptr-array (cons (i64-const index) ()))
-                  int 1
-                  * 'value-ptr'))
-    (def val (c-call LLVMBuildLoad *
-              * main-b
-              * val-loc
-              * 'value'))
-    (state-set-cur-value (state-add-local s^ sym val) val))
-   (warn (str (cons (symbol-name sym) (cons ' not found!' ())))))))
-
-(def tr-load-from-global
- (fn (sym state)
-  (def glb (state-get-global state sym))
-    (if glb
-     (unpair glb (fn (label val)
-      (if (= 'var' label)
-      (state-set-cur-value state (c-call LLVMBuildLoad * * main-b * val * 'load_from_var'))
-       (error (str (cons 'expected ' (cons (symbol-name sym) (cons ' to be a variable, actually is ' (cons label ())))))))))
-    (error (str (cons 'unknown variable ' (cons (symbol-name sym) ())))))))
-
-(def tr-load
- (fn (sym state)
-  (def lcl (state-get-local state sym))
-  (if lcl
-   (state-set-cur-value state lcl)
-   (if (state-can-borrow state)
-    (tr-load-from-borrow sym state)
-    (tr-load-from-global sym state)))))
 
 ; LLVMTypeKind
 (def LLVMVoidTypeKind 0) ; type with no size
@@ -594,26 +547,120 @@
   (def arg-t-array (c-ptr-array c-typed-args))
   (c-call LLVMFunctionType * * ret-c-type * arg-t-array int num-args int 0)))
 
+(def tr-define-val
+ (fn (module name val)
+  (debug (str (cons 'defining glb val: ' (cons (symbol-name name) ()))))
+  (def var (c-call LLVMAddGlobal * * module * value-type * (symbol-name name)))
+  (c-call LLVMSetInitializer void
+   * var
+   * (if (= 0 (c-call LLVMIsConstant int * val))
+      (c-call LLVMConstNull * * value-type)
+      val))
+  var))
+
 (def tr-declare-c-fn
  (fn (module name ret-type arg-types)
+  (debug (str (cons 'declaring glb C fn: ' (cons (symbol-name name) ()))))
   (c-call LLVMAddFunction * * module * (symbol-name name) * (tr-c-fn-type ret-type arg-types))))
 
 (def tr-declare-c-var
  (fn (module name)
-  (debug (str (cons 'declaring glb var: ' (cons (symbol-name name) ()))))
+  (debug (str (cons 'declaring glb C var: ' (cons (symbol-name name) ()))))
   (c-call LLVMAddGlobal * * module * pointer-type * (symbol-name name))))
 
 (def state-add-global-tagged (fn (state key tag thing)
  (state-add-global state key (pair tag thing))))
 
+(def val-tag 'var')
 (def c-fn-tag 'c-fn')
 (def c-var-tag 'c-var')
+
+(def state-add-global-val (fn (state name val)
+ (state-add-global-tagged state name val-tag (tr-define-val (state-module state) name val))))
 
 (def state-add-global-fn (fn (state fn-name ret-type arg-types)
  (state-add-global-tagged state fn-name c-fn-tag (tr-declare-c-fn (state-module state) fn-name ret-type arg-types))))
 
 (def state-add-global-var (fn (state var-name)
  (state-add-global-tagged state var-name c-var-tag (tr-declare-c-var (state-module state) var-name))))
+
+(def state-get-global-tagged (fn (state key tag error-msg)
+ (def g (state-get-global state key))
+ (if (not g)
+  (do (error (str (cons key (cons ' not found' ())))) nil)
+  (unpair g (fn (actual-tag ref)
+   (if (not (= tag actual-tag))
+    (do (error (str (cons key (cons error-msg (cons actual-tag ()))))) nil)
+    ref))))))
+
+(def redeclare-var (fn (module ref)
+ (def name (c-str (c-call LLVMGetValueName * * ref)))
+ (def local-ref (c-call LLVMGetNamedGlobal * * module * name))
+ (if (not (c-nil? local-ref))
+  local-ref
+  (do
+   (trace (str (cons 'redeclaring var ' (cons name ()))))
+   (c-call LLVMAddGlobal *
+    * module
+    * (c-call LLVMGetElementType * * (c-call LLVMTypeOf * * ref))
+    * name)))))
+
+(def redeclare-fn (fn (module ref)
+ (def name (c-str (c-call LLVMGetValueName * * ref)))
+ (def local-ref (c-call LLVMGetNamedFunction * * module * name))
+ (if (not (c-nil? local-ref))
+  local-ref
+  (do
+   (trace (str (cons 'redeclaring fn ' (cons name ()))))
+   (c-call LLVMAddFunction *
+    * module
+    * name
+    * (c-call LLVMGetElementType * * (c-call LLVMTypeOf * * ref)))))))
+
+(def state-get-global-val (fn (state key)
+ (redeclare-var (state-module state) (state-get-global-tagged state key val-tag ' is expected to be a pint value, but actually is '))))
+
+(def state-get-global-fn (fn (state key)
+ (redeclare-fn (state-module state) (state-get-global-tagged state key c-fn-tag ' is expected to be a C function, but actually is '))))
+
+(def state-get-global-var (fn (state key)
+ (redeclare-var (state-module state) (state-get-global-tagged state key c-var-tag ' is expected to be a C variable, but actually is '))))
+
+(def tr-load-from-borrow
+ (fn (sym state)
+  (def s^ (state-borrow state sym))
+  (if s^
+   (do
+    (def index (indexof sym (state-borrow-list s^)))
+    (trace (str (cons (symbol-name sym) (cons ' borrow index: ' (cons index ())))))
+    (def val-loc (c-call LLVMBuildInBoundsGEP *
+                  * main-b
+                  * (state-get-local s^ '')
+                  * (c-ptr-array (cons (i64-const index) ()))
+                  int 1
+                  * 'value-ptr'))
+    (def val (c-call LLVMBuildLoad *
+              * main-b
+              * val-loc
+              * 'value'))
+    (state-set-cur-value (state-add-local s^ sym val) val))
+   (warn (str (cons (symbol-name sym) (cons ' not found!' ())))))))
+
+(def tr-load-from-global
+ (fn (sym state)
+  (state-set-cur-value state (c-call LLVMBuildLoad *
+                              * main-b
+                              * (state-get-global-val state sym)
+                              * 'load_from_var'))))
+
+(def tr-load
+ (fn (sym state)
+  (def lcl (state-get-local state sym))
+  (if lcl
+   (state-set-cur-value state lcl)
+   (if (state-can-borrow state)
+    (tr-load-from-borrow sym state)
+    (tr-load-from-global sym state)))))
 
 (def tr-c-call
  (fn (form state tr)
@@ -640,12 +687,7 @@
      (state-cur-value state^)
      (c-call LLVMPointerType * * (tr-c-fn-type ret-type arg-types) int 0)
      'fn-ptr')
-    (do
-     (def entry (state-get-global state^ fn-expr))
-     (unpair entry (fn (label val)
-                    (if (= label c-fn-tag)
-                     val
-                     (error (str (cons 'not a C fn: ' (cons (symbol-name fn-expr) ()))))))))))
+    (state-get-global-fn state^ fn-expr)))
 
   (def casts (stap (fn (st typed-arg)
                     (unpair typed-arg
@@ -685,12 +727,7 @@
     state
     (state-add-global-var state val-name)))
 
-  (def entry (state-get-global state^ val-name))
-
-  (def target-val (unpair entry (fn (label val)
-                                 (if (= label c-var-tag)
-                                  val
-                                  (error (str (cons 'not a C var: ' (cons (symbol-name val-name) ()))))))))
+  (def target-val (state-get-global-var state^ val-name))
 
   (def c-ptr-val (build-val
                   c-pointer-type-index
@@ -812,7 +849,7 @@
   (pair f ret)))
 
 (def gen-fn-frame-global
- (fn (state f borrowed-vars)
+ (fn (state global-name f borrowed-vars)
   (trace (str (cons 'assembling closure frame (global): ' (cons borrowed-vars ()))))
   (def borrowed-vars-num (list-length borrowed-vars))
 
@@ -840,7 +877,7 @@
    (def frame-glb (c-call LLVMAddGlobal * * (state-module state^) * type * ''))
    (c-call LLVMSetInitializer void * frame-glb * initializer)
 
-   (def fn-glb (c-call LLVMAddGlobal * * (state-module state^) * value-type * ''))
+   (def fn-glb (c-call LLVMAddGlobal * * (state-module state^) * value-type * global-name))
    (c-call LLVMSetInitializer void * fn-glb * (c-call LLVMConstNamedStruct *
                                                * value-type
                                                * (c-ptr-array (cons function-type-index (cons (c-call LLVMConstPtrToInt * * frame-glb * i64-type) ())))
@@ -855,7 +892,7 @@
    (def frame-size (+ 8 (* 16 borrowed-vars-num)))
    (def frame-mem (c-call LLVMBuildCall *
                    * main-b
-                   * (snd (state-get-global state (quote malloc)))
+                   * (state-get-global-fn state (quote malloc))
                    * (c-ptr-array (cons (i32-const frame-size) ()))
                    int 1
                    * 'alloc-frame'))
@@ -928,10 +965,12 @@
 
   (def built-in-fn
    (fn (state name num-args body)
+    (def llvm-name (str (cons ';built-in-' (cons (symbol-name name) ()))))
     (def f (fst (gen-fn (state-module state) num-args (fn (frame args bb) (body args)))))
-    (def f-val-glb (gen-fn-frame-global state f ())) ; todo builtins as globals, they are loaded on the heap, which is not strictly necessary
-    (def f-val (c-call LLVMBuildLoad * * main-b * (state-cur-value f-val-glb) * (str (cons 'built-in-' (cons (symbol-name name) ())))))
-    (state-add-local state name f-val)))
+    (def f-val-glb (gen-fn-frame-global state llvm-name f ())) ; todo builtins as globals, they are loaded on the heap, which is not strictly necessary
+    (def glb (state-cur-value f-val-glb))
+    (def lcl (c-call LLVMBuildLoad * * main-b * glb * llvm-name))
+    (state-add-local (state-add-global-tagged state name val-tag glb) name lcl)))
 
   (def s-cons
    (built-in-fn s-malloc (quote cons) 2 (fn (args) (unpair args (fn (e l)
@@ -952,7 +991,7 @@
 
     (def alloc (c-call LLVMBuildCall *
                 * main-b
-                * (snd (state-get-global s-malloc (quote malloc)))
+                * (state-get-global-fn s-malloc (quote malloc))
                 * (c-ptr-array (cons (i32-const 24) ()))
                 int 1
                 * 'list-elem-mem-void-ptr'))
@@ -1217,42 +1256,89 @@
 
   s-symbol-name))
 
+(def LLVMAbortProcessAction 0)
+(def LLVMPrintMessageAction 1)
+(def LLVMReturnStatusAction 2)
+
+(def ref-build (fn ()  (c-array * 1)))
+(def ref-ref   (fn (r) r))
+(def ref-deref (fn (r) (c-get * r)))
+
+(def ee (ref-build))
+
+(def with-jit-builder (fn (state callback) ; todo put own builder into state
+ (def prev (c-call LLVMGetInsertBlock * * main-b))
+ (c-call LLVMPositionBuilderAtEnd void * main-b * (state-bb state))
+ (def ret (callback))
+ (c-call LLVMPositionBuilderAtEnd void * main-b * prev)
+ ret))
+
+(def jit (fn (state)
+ (c-call LLVMBuildRetVoid * * main-b) ; todo instead of retVoid -> return current value and print it (re"P"l)
+
+ (c-call LLVMAddModule void * (ref-deref ee) * (state-module state))
+ 
+ (trace 'verifying code to be jitted...')
+ (def err (ref-build))
+ (if (not (= 0 (c-call LLVMVerifyModule int * (state-module state) int LLVMPrintMessageAction * (ref-ref err))))
+  (do
+   (error 'could not jit:')
+   (c-call LLVMDumpModule void * (state-module state))
+   (prln (c-str (ref-deref err))))
+  (do
+   (trace 'verification succeeded. jitting code...')
+   (def main-fn (c-call LLVMGetPointerToGlobal * * (ref-deref ee) * (state-fn state))) ; this fn is deprecated for mcjit
+   (trace 'code jitted')
+   (c-call * main-fn void)
+   (trace 'code executed')
+   (def index (+ 1 (state-get-global state ';module')))
+   (def bb (create-module void-type (str (cons ';module' (cons index ())))))
+   (state-add-global (state-set-bb (state-clear-locals state) bb) ';module' index)))))
+
+(def init-jit (fn ()
+ (debug 'initializing jit...')
+ (def m-bb (create-module void-type ';module0'))
+
+ (def state (state-add-global (init-state m-bb) ';module' 0)) ; todo model properly in state
+
+ (with-jit-builder state (fn ()
+  (def state^ (built-ins state))
+ 
+  (c-call LLVMLinkInMCJIT void)
+  (c-call LLVMInitializeX86TargetInfo void) ; todo support multiple targets
+  (c-call LLVMInitializeX86Target void)
+  (c-call LLVMInitializeX86TargetMC void)
+  (c-call LLVMInitializeX86AsmPrinter void)
+ 
+  (def err (ref-build))
+ 
+  (if (not (= 0 (c-call LLVMCreateJITCompilerForModule int * (ref-ref ee) * (state-module state^) int 0 * (ref-ref err))))
+   (prln (c-str (ref-deref err)))
+   (do
+    (debug 'jit initialized')
+    (jit state^)))))))
+
+(def jitting? (fn (state) (state-get-global state ';module')))
+
 ; macro poc
 (def tr-macro (fn (form state tr)
  (debug 'defining macro')
 
- (def m-bb (create-module value-type 'POCMACRO'))
-
  (def prev (c-call LLVMGetInsertBlock * * main-b))
- (c-call LLVMPositionBuilderAtEnd void * main-b * m-bb)
+ (c-call LLVMPositionBuilderAtEnd void * main-b * (state-bb state))
 
- (def macro-state (built-ins (init-state m-bb)))
- (def macro-state^ (tr-fn form macro-state tr))
- (c-call LLVMBuildRet * * main-b * (state-cur-value macro-state^))
+ (def state^ (tr-fn form state tr))
+ (c-call LLVMBuildRet * * main-b * (state-cur-value state^))
 
  (c-call LLVMPositionBuilderAtEnd void * main-b * prev)
 
+ (c-call LLVMAddModule void * (c-get * ee) * (state-module state^))
+
+ (def macro (c-call * (c-call LLVMGetPointerToGlobal * * (c-get * ee) * (state-fn state)) =)) ; this fn is deprecated for mcjit
+
  (debug 'macro jit code-gen complete')
 
- (c-call LLVMLinkInMCJIT void)
- (c-call LLVMInitializeX86TargetInfo void) ; todo support multiple targets
- (c-call LLVMInitializeX86Target void)
- (c-call LLVMInitializeX86TargetMC void)
- (c-call LLVMInitializeX86AsmPrinter void)
-
- (def ee (c-array * 1))
- (def err (c-array * 1))
-
- (if (= 0 (c-call LLVMCreateJITCompilerForModule int * ee * (state-module macro-state) int 0 * err))
-  (do
-   (debug 'macro compilation done')
-   ;(c-call LLVMDumpModule void * (state-module macro-state))
-   (def macro (c-call * (c-call LLVMGetPointerToGlobal * * (c-get * ee) * (state-fn macro-state)) =)) ; this fn is deprecated for mcjit
-
-   (debug 'reference to macro obtained')
-
-   (state-add-global state 'POCMACRO' macro)) ; todo store macros correctly
-  (prln (c-str (c-get * err))))))
+ (state-add-global state 'POCMACRO' macro))) ; todo store macros correctly
 
 (def tr-macro-poc
  (fn (form state tr)
@@ -1276,20 +1362,9 @@
   (def state^
      (if (state-get-global state name)
        state
-       (do
-         (def var (c-call LLVMAddGlobal * * (state-module state) * value-type * (symbol-name name)))
-         (c-call LLVMSetInitializer void * var *
-          (if (= 0 (c-call LLVMIsConstant int * val))
-           (c-call LLVMConstNull * * value-type)
-           val))
+       (state-add-global-val state name val)))
 
-         (state-add-global state name (pair 'var' var)))))
-
-  (def gl-var (unpair (state-get-global state^ name)
-               (fn (label var)
-                (if (= 'var' label)
-                 var
-                 (error (str (cons 'expected ' (cons (symbol-name name) (cons ' to be a variable, but actually is ' (cons label ()))))))))))
+  (def gl-var (state-get-global-val state^ name))
 
   (c-call LLVMBuildStore * * main-b * val * gl-var)
 
@@ -1376,7 +1451,7 @@
 
    (def array-mem (c-call LLVMBuildCall *
                    * main-b
-                   * (snd (state-get-global state (quote malloc)))
+                   * (state-get-global-fn state (quote malloc))
                    * (c-ptr-array (cons (size-of-i32 c-type (state-cur-value len)) ()))
                    int 1
                    * 'alloc-array'))
@@ -1518,8 +1593,12 @@
    (if (= (symbol 'macro-poc') (head form))
      (tr-macro-poc form state tr)
 
-   (tr-call form state tr)))))))))))))))))
-
+   (if (= (symbol 'dynamic') (head form))
+     (if (jitting? state)
+      (tr-nil state)
+      (tr form state tr))
+     
+   (tr-call form state tr))))))))))))))))))
 
 (def tr
   (fn (code)
@@ -1527,25 +1606,34 @@
     (c-call LLVMPositionBuilderAtEnd void * main-b * main-bb)
 
     (def s (built-ins (init-state main-bb)))
+    (def j (init-jit))
 
-    (def tr^ (fn (c state rec)
+    (def tr-single (fn (h state rec)
+     (if (is-list h)
+         (tr-form h state rec)
+     (if (is-string h)
+         (tr-string h state)
+     (if (is-number h)
+         (tr-number h state)
+     (if (is-symbol h)
+         (tr-load h state)
+         (tr-default state))))))) ; todo other options
+
+    (def tr-only (fn (c state rec)
+     (if (empty? c)
+      state
+      (rec (tail c) (tr-single (head c) state rec) rec))))
+
+    (def tr-and-jit (fn (c states rec)
       (if (empty? c)
-       state
-       ((fn (h t)
-         (def state
-            (if (is-list h)
-             (tr-form h state rec)
-            (if (is-string h)
-             (tr-string h state)
-            (if (is-number h)
-             (tr-number h state)
-            (if (is-symbol h)
-             (tr-load h state)
-             (tr-default state)))))) ; todo other options
-         (rec t state rec)
+       states
+       ((fn (h t) (unpair states (fn (s j)
+        (def s^ (tr-single h s tr-only))
+        (def j^ (with-jit-builder j (fn () (jit (tr-single h j tr-only)))))
+        (rec t (pair s^ j^) rec)))
        ) (head c) (tail c)))))
 
-    (def exit-state (tr^ code s tr^))
+    (def exit-state (fst (tr-and-jit code (pair s j) tr-and-jit)))
     (def exit-code (state-cur-value exit-state))
 
     (c-call LLVMBuildRet *
@@ -1567,34 +1655,54 @@
 
     exit-state))
 
-(def m (state-module (tr code)))
+(include parser)
 
-(c-call LLVMDisposeBuilder void * main-b)
+(def dynamic (fn (x) x)) ; hack to keep old parser able to compile itself ; todo remove once macros are fully implemented
 
-(info 'translation to llvm module done')
-(info 'verifying module...')
+(dynamic (do
+ (info 'reading input...')
 
-(def LLVMAbortProcessAction 0)
-(def LLVMPrintMessageAction 1)
-(def LLVMReturnStatusAction 2)
+ (def INPUT (slurp-stdin))
 
-(def ref-build (fn ()  (c-array * 1)))
-(def ref-ref   (fn (r) r))
-(def ref-deref (fn (r) (c-get * r)))
+ (info 'input read')
+ (info 'parsing code...')
 
-(def err (ref-build))
+ (def code (parse INPUT))
 
-(if (not (= 0 (c-call LLVMVerifyModule int * m int LLVMPrintMessageAction * (ref-ref err))))
-  (prln (c-str (ref-deref err)))
+ (if (not code)
   (do
-    (info 'verified successfully')
+   (error 'could not parse')
+   1) ; todo do not use exit
+  (do
+   ;(prln (pp code))
 
-    (info 'ouputting llvm code...')
-    (prln '')
+   (info 'code parsed')
+   (info 'translating to llvm...')
 
-    (c-call LLVMDumpModule void * m)
-    (if (not (= 0 (c-call LLVMPrintModuleToFile int * m * 'out.ll' * (ref-ref err))))
-      (prln (ref-deref err))
-      (do
-        (info 'out.ll written')
-        0))))
+   (def m (state-module (tr code)))
+
+   (c-call LLVMDisposeBuilder void * main-b)
+
+   (info 'translated to llvm')
+   (info 'verifying module...')
+
+   (def err (ref-build))
+
+   (if (not (= 0 (c-call LLVMVerifyModule int * m int LLVMPrintMessageAction * (ref-ref err))))
+     (do
+      (error 'could not translate:')
+      (c-call LLVMDumpModule void * m)
+      (prln (c-str (ref-deref err)))
+      2)
+     (do
+       (info 'module verified')
+
+       (info 'writing out.ll...')
+
+       (if (not (= 0 (c-call LLVMPrintModuleToFile int * m * 'out.ll' * (ref-ref err))))
+         (do
+          (prln (ref-deref err))
+          3)
+         (do
+           (info 'out.ll written')
+           0))))))))
