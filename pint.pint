@@ -1274,7 +1274,7 @@
  ret))
 
 (def jit (fn (state)
- (c-call LLVMBuildRetVoid * * main-b) ; todo instead of retVoid -> return current value and print it (re"P"l)
+ (c-call LLVMBuildRet * * main-b * (state-cur-value state)) ; todo print it (re"P"l)
 
  (c-call LLVMAddModule void * (ref-deref ee) * (state-module state))
  
@@ -1289,20 +1289,27 @@
    (trace 'verification succeeded. jitting code...')
    (def main-fn (c-call LLVMGetPointerToGlobal * * (ref-deref ee) * (state-fn state))) ; this fn is deprecated for mcjit
    (trace 'code jitted')
-   (c-call * main-fn void)
+   (def result (c-call * main-fn =))
    (trace 'code executed')
-   (def index (+ 1 (state-get-global state ';module')))
-   (def bb (create-module void-type (str (cons ';module' (cons index ())))))
-   (state-add-global (state-set-bb (state-clear-locals state) bb) ';module' index)))))
+   (state-set-cur-value state result)))))
+
+(def create-jit-module (fn (state)
+ (def index (state-get-global state ';module'))
+ (def bb (create-module value-type (str (cons ';module' (cons index ())))))
+ (state-add-global (state-set-bb (state-clear-locals state) bb) ';module' (+ index 1))))
+
+(def jit-and-eval (fn (state callback)
+ (def state^ (create-jit-module state))
+ (state-set-bb
+  (with-jit-builder state^ (fn ()
+   (jit (callback state^))))
+  (state-bb state))))
 
 (def init-jit (fn ()
  (debug 'initializing jit...')
- (def m-bb (create-module void-type ';module0'))
 
- (def state (state-add-global (init-state m-bb) ';module' 0)) ; todo model properly in state
-
- (with-jit-builder state (fn ()
-  (def state^ (built-ins state))
+ (jit-and-eval (state-add-global (init-state nil) ';module' 0) (fn (state) ; todo model properly in state
+  (def state^ (tr-nil (built-ins state)))
  
   (c-call LLVMLinkInMCJIT void)
   (c-call LLVMInitializeX86TargetInfo void) ; todo support multiple targets
@@ -1316,29 +1323,24 @@
    (prln (c-str (ref-deref err)))
    (do
     (debug 'jit initialized')
-    (jit state^)))))))
+    state^))))))
 
 (def jitting? (fn (state) (state-get-global state ';module')))
 
-; macro poc
 (def tr-macro (fn (form state tr)
- (debug 'defining macro')
+ (uncons (tail form) (fn (name code)
+  (trace (str (cons 'defining macro ' (cons name ()))))
 
- (def prev (c-call LLVMGetInsertBlock * * main-b))
- (c-call LLVMPositionBuilderAtEnd void * main-b * (state-bb state))
+  (def state^
+   (if (jitting? state)
+    (jit-and-eval state (fn (state) (tr code state tr))) ; todo store evaled-value in state
+    (state-set-cur-value state 1337))) ; todo use evaled-value from state
 
- (def state^ (tr-fn form state tr))
- (c-call LLVMBuildRet * * main-b * (state-cur-value state^))
+  (def evaled-value (state-cur-value state^))
 
- (c-call LLVMPositionBuilderAtEnd void * main-b * prev)
+  (trace (str (cons 'inlining ' (cons (pp evaled-value) (cons ' for ' (cons (pp code) ()))))))
 
- (c-call LLVMAddModule void * (c-get * ee) * (state-module state^))
-
- (def macro (c-call * (c-call LLVMGetPointerToGlobal * * (c-get * ee) * (state-fn state)) =)) ; this fn is deprecated for mcjit
-
- (debug 'macro jit code-gen complete')
-
- (state-add-global state 'POCMACRO' macro))) ; todo store macros correctly
+  (tr (cons evaled-value ()) state^ tr)))))
 
 (def tr-macro-poc
  (fn (form state tr)
@@ -1628,8 +1630,8 @@
       (if (empty? c)
        states
        ((fn (h t) (unpair states (fn (s j)
+        (def j^ (jit-and-eval j (fn (j) (tr-single h j tr-only))))
         (def s^ (tr-single h s tr-only))
-        (def j^ (with-jit-builder j (fn () (jit (tr-single h j tr-only)))))
         (rec t (pair s^ j^) rec)))
        ) (head c) (tail c)))))
 
