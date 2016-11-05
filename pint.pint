@@ -572,11 +572,15 @@
  (state-add-global state key (pair tag thing))))
 
 (def val-tag 'var')
+(def macro-tag 'macro')
 (def c-fn-tag 'c-fn')
 (def c-var-tag 'c-var')
 
 (def state-add-global-val (fn (state name val)
  (state-add-global-tagged state name val-tag (tr-define-val (state-module state) name val))))
+
+(def state-add-macro (fn (state name val) ; todo macros work only on global scope for now
+ (state-add-global-tagged state name macro-tag val)))
 
 (def state-add-global-fn (fn (state fn-name ret-type arg-types)
  (state-add-global-tagged state fn-name c-fn-tag (tr-declare-c-fn (state-module state) fn-name ret-type arg-types))))
@@ -620,11 +624,24 @@
 (def state-get-global-val (fn (state key)
  (redeclare-var (state-module state) (state-get-global-tagged state key val-tag ' is expected to be a pint value, but actually is '))))
 
+(def state-get-macro (fn (state key)
+ (def g (state-get-global state key))
+ (if g
+  (unpair g (fn (tag val)
+   (if (= tag macro-tag)
+    val
+    nil)))
+  nil)))
+
 (def state-get-global-fn (fn (state key)
  (redeclare-fn (state-module state) (state-get-global-tagged state key c-fn-tag ' is expected to be a C function, but actually is '))))
 
 (def state-get-global-var (fn (state key)
  (redeclare-var (state-module state) (state-get-global-tagged state key c-var-tag ' is expected to be a C variable, but actually is '))))
+
+; todo this is a hack, for multiple reasons, important one being, that we first need to fix macros to be allowed on non-global levels also
+(def state-set-non-jit (fn (state non-jit-state) (state-add-global state ';non-jit' non-jit-state)))
+(def state-non-jit (fn (state) (state-get-global state ';non-jit')))
 
 (def tr-load-from-borrow
  (fn (sym state)
@@ -1333,8 +1350,15 @@
 
   (def state^
    (if (jitting? state)
-    (jit-and-eval state (fn (state) (tr code state tr))) ; todo store evaled-value in state
-    (state-set-cur-value state 1337))) ; todo use evaled-value from state
+    (do
+     (def state^^ (jit-and-eval state (fn (state) (tr code state tr))))
+
+     (def evaled-value (state-cur-value state^^))
+
+     (state-set-non-jit
+      (state-add-macro state^^ name evaled-value)
+      (state-add-macro (state-non-jit state^^) name evaled-value)))
+    (state-set-cur-value state (state-get-macro state name))))
 
   (def evaled-value (state-cur-value state^))
 
@@ -1630,8 +1654,8 @@
       (if (empty? c)
        states
        ((fn (h t) (unpair states (fn (s j)
-        (def j^ (jit-and-eval j (fn (j) (tr-single h j tr-only))))
-        (def s^ (tr-single h s tr-only))
+        (def j^ (jit-and-eval j (fn (j) (tr-single h (state-set-non-jit j s) tr-only))))
+        (def s^ (tr-single h (state-non-jit j^) tr-only))
         (rec t (pair s^ j^) rec)))
        ) (head c) (tail c)))))
 
