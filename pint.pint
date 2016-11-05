@@ -591,10 +591,10 @@
 (def state-get-global-tagged (fn (state key tag error-msg)
  (def g (state-get-global state key))
  (if (not g)
-  (do (error (str (cons key (cons ' not found' ())))) nil)
+  (do (error (str (cons (symbol-name key) (cons ' not found' ())))) nil)
   (unpair g (fn (actual-tag ref)
    (if (not (= tag actual-tag))
-    (do (error (str (cons key (cons error-msg (cons actual-tag ()))))) nil)
+    (do (error (str (cons (symbol-name key) (cons error-msg (cons actual-tag ()))))) nil)
     ref))))))
 
 (def redeclare-var (fn (module ref)
