@@ -17,7 +17,7 @@
   (def m (sys (str (cons 'mv out.ll ' (cons target-ll ())))))
   (if (p/ident m 0)
    (do
-    (def c (sys (str (cons 'llc ' (cons target-ll ())))))
+    (def c (sys (str (cons 'llc -relocation-model=pic ' (cons target-ll ())))))
     (if (p/ident c 0)
      (sys (str (cons 'clang ' (cons target-s (cons ' -o ' (cons target ()))))))
      c))
