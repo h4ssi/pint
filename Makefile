@@ -1,63 +1,82 @@
-SHELL = /bin/bash
 pint_deps = hello pint.pint std.pint parser.pint io.pint includer-hack build-pint
 
-all: hello
+docker_image = pint/build-env
+docker = sudo docker run --rm -i --mount type=bind,source="$(CURDIR)",target=/pint -w /pint --ulimit stack=-1 $(docker_image)
+chown = sudo chown $(shell id -u):$(shell id -g)
 
-hello.o: hello.cc
-	clang++ -std=c++14 -c hello.cc $(shell pkg-config libffi --cflags)
+.PHONY: all test clean docker_image test-self-hosting
 
-extern.o: extern.cc
-	clang++ -std=c++14 -c extern.cc $(shell llvm-config --cflags)
+all: pint
 
-hello: hello.o extern.o
-	clang++ -rdynamic $(shell llvm-config --ldflags) -Wl,--whole-archive -ldl $(shell pkg-config libffi --libs) $(shell llvm-config --system-libs --libs engine) -Wl,--no-whole-archive hello.o extern.o -o hello
+docker_image:
+	sudo docker build -t $(docker_image) docker
 
-llvm-c-poc: llvm-c-poc.c
-	clang++ llvm-c-poc.c $(shell llvm-config --cflags --ldflags --system-libs --libs engine) -o llvm-c-poc
+hello.o: hello.cc | docker_image
+	$(docker) clang++ -std=c++14 -c $< $(shell pkg-config libffi --cflags)
+	$(chown) $@
 
-helloworld: helloworld.pint $(pint_deps)
-	echo -n helloworld | ./build-pint
+extern.o: extern.cc | docker_image
+	$(docker) clang++ -std=c++14 -c $< $(shell llvm-config --cxxflags)
+	$(chown) $@
 
-# special bootstrap for includer hack
-includer-hack.ll: includer-hack.pint hello pint.pint std.pint io.pint parser.pint
-	./hello <(cat io.pint std.pint parser.pint pint.pint | grep -v '(include ') includer-hack.pint
-	mv out.ll includer-hack.ll
+hello: hello.o extern.o | docker_image
+	$(docker) clang++ -rdynamic $(shell llvm-config --ldflags) -Wl,--whole-archive -ldl $(shell pkg-config libffi --libs) $(shell llvm-config --system-libs --libs engine) -Wl,--no-whole-archive $+ -o $@
+	$(chown) $@
 
-includer-hack.s: includer-hack.ll
-	llc includer-hack.ll
+llvm-c-poc: llvm-c-poc.c | docker_image
+	$(docker) clang++ $< $(shell llvm-config --cflags --ldflags --system-libs --libs engine) -o $@
+	$(chown) $@
 
-includer-hack: includer-hack.s
-	clang includer-hack.s -o includer-hack
+# special bootstrap for includer-hack (cannot use includer-hack)
+includer-hack.ll: includer-hack.pint hello pint.pint std.pint io.pint parser.pint | docker_image
+	cat io.pint std.pint parser.pint pint.pint | grep -v '(include ' > .pint.pint
+	$(docker) ./hello .pint.pint $<
+	$(chown) out.ll
+	mv out.ll $@
 
-pint.ll: hello pint.pint std.pint parser.pint io.pint includer-hack
-	./hello <(echo -n pint.pint | ./includer-hack) <(echo -n pint.pint | ./includer-hack)
-	mv out.ll pint.ll
+%.s: %.ll | docker_image
+	$(docker) llc -relocation-model=pic $<
+	$(chown) $@
 
-pint.s: pint.ll
-	llc pint.ll
+includer-hack: includer-hack.s | docker_image
+	$(docker) clang $< -o $@
+	$(chown) $@
 
-pint: pint.s extern.o
-	clang++ pint.s extern.o $(shell llvm-config --ldflags --system-libs --libs engine) -o pint
+# special bootstrap for build-pint (cannot use build-pint)
+build-pint.ll: build-pint.pint includer-hack hello pint.pint std.pint io.pint parser.pint | docker_image
+	echo -n pint.pint | $(docker) ./includer-hack > .pint.pint || /bin/true
+	echo -n build-pint.pint | $(docker) ./includer-hack > .build-pint.pint || /bin/true
+	$(docker) ./hello .pint.pint .build-pint.pint
+	$(chown) out.ll
+	mv out.ll $@
 
-pint-from-compiler.ll: pint pint.pint std.pint parser.pint io.pint includer-hack
-	echo -n pint.pint | ./includer-hack | ./pint
-	mv out.ll pint-from-compiler.ll
+build-pint: build-pint.s | docker_image
+	$(docker) clang $< -o $@
+	$(chown) $@
+
+helloworld: helloworld.pint $(pint_deps) | docker_image
+	echo -n helloworld | $(docker) ./build-pint
+	$(chown) $@
+
+# special bootstrap for pint (no linker support in build-pint)
+pint.ll: hello pint.pint std.pint parser.pint io.pint includer-hack | docker_image
+	echo -n pint.pint | $(docker) ./includer-hack > .pint.pint || /bin/true
+	$(docker) ./hello .pint.pint .pint.pint
+	$(chown) out.ll
+	mv out.ll $@
+
+pint: pint.s extern.o | docker_image
+	$(docker) clang++ $+ $(shell llvm-config --link-static --ldflags --system-libs --libs engine) -o $@
+	$(chown) $@
+
+pint-from-compiler.ll: pint pint.pint std.pint parser.pint io.pint includer-hack | docker_image
+	echo -n pint.pint | $(docker) ./includer-hack | $(docker) ./pint || /bin/true
+	$(chown) out.ll
+	mv out.ll $@
 
 test-self-hosting: pint.ll pint-from-compiler.ll
-	diff pint.ll pint-from-compiler.ll
-
-build-pint.ll: build-pint.pint includer-hack hello pint.pint std.pint io.pint parser.pint
-	./hello <(echo -n pint.pint | ./includer-hack) <(echo -n build-pint.pint | ./includer-hack)
-	mv out.ll build-pint.ll
-
-build-pint.s: build-pint.ll
-	llc build-pint.ll
-
-build-pint: build-pint.s
-	clang build-pint.s -o build-pint
+	diff $+
 
 clean:
-	rm -f hello hello.o extern.o llvm-c-poc helloworld{,.s,.ll} includer-hack{,.s,.ll} pint{,.s,.ll,-from-compiler.ll} build-pint{,.s,.ll}
-
-.PHONY: all clean test-self-hosting
+	rm -f hello hello.o extern.o llvm-c-poc helloworld{,.s,.ll} includer-hack{,.s,.ll} pint{,.s,.ll,-from-compiler.ll} build-pint{,.s,.ll} .{,build-}pint.pint
 

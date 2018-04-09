@@ -35,7 +35,7 @@
    (def m (sys (join 'mv out.ll ' target-ll)))
    (if (p/ident m 0)
     ((fn ()
-      (def c (sys (join 'llc ' target-ll)))
+      (def c (sys (join 'llc -relocation-model=pic ' target-ll)))
       (if (p/ident c 0)
        (sys (join 'clang ' (join target-s (join ' -o ' target))))
        c)))

@@ -20,6 +20,7 @@
 #include <string>
 #include <list>
 #include <memory>
+#include <functional>
 
 using std::begin;
 using std::end;
