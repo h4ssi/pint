@@ -18,7 +18,7 @@ define undevify =
 rm -f $(devified)
 endef
 
-.PHONY: all bootstrap test clean clean-bootstrap docker_image test-self-hosting
+.PHONY: all bootstrap test clean clean-bootstrap docker_image test-self-hosting self
 
 all: pint-dev
 
@@ -88,6 +88,13 @@ pint-from-dev.ll: pint.pint $(pint_deps) | docker_image
 
 test-self-hosting: pint-dev.ll pint-from-dev.ll
 	diff $+
+
+self: test-self-hosting $(pint_deps) | docker_image
+	cp pint-dev pint # cannot use build-pint (see above)
+	echo -n includer-hack | $(docker) ./build-pint-dev
+	$(chown) includer-hack
+	echo -n build-pint | $(docker) ./build-pint-dev
+	$(chown) build-pint
 
 clean:
 	rm -f extern.o helloworld{,.s,.ll} includer-hack-dev{,.s,.ll} pint-dev{,.s,.ll,-from-dev.ll} build-pint-dev{,.s,.ll}
