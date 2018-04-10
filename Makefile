@@ -4,6 +4,9 @@ docker_image = pint/build-env
 docker = sudo docker run --rm -i --mount type=bind,source="$(CURDIR)",target=/pint -w /pint --ulimit stack=-1 $(docker_image)
 chown = sudo chown $(shell id -u):$(shell id -g)
 
+ROOTDIR ?= $(CURDIR)
+export ROOTDIR
+
 define devified
 $(<:.pint=-dev.pint)
 endef
@@ -15,12 +18,21 @@ define undevify =
 rm -f $(devified)
 endef
 
-.PHONY: all test clean clean-bootstrap docker_image test-self-hosting
+.PHONY: all bootstrap test clean clean-bootstrap docker_image test-self-hosting
 
 all: pint-dev
 
-pint: bootstrap.sh
-	./bootstrap.sh
+# build-pint uses interpreter, so cannot be used from previous stage
+
+prev_step = bootstrap/step-1
+bootstrapped = pint includer-hack
+
+bootstrap: $(bootstrapped)
+$(bootstrapped):
+	rm -rf "$(ROOTDIR)/$(prev_step)"
+	git clone -s "$(ROOTDIR)" -b "$(shell git -C $(ROOTDIR) for-each-ref --count 1 --format '%(refname:short)' '**/$(prev_step)')" "$(ROOTDIR)/$(prev_step)"
+	$(MAKE) -C "$(ROOTDIR)/$(prev_step)" test-self-hosting $(bootstrapped)
+	cp $(bootstrapped:%=$(ROOTDIR)/$(prev_step)/%) $(CURDIR)
 
 docker_image:
 	sudo docker build -t $(docker_image) docker
@@ -30,7 +42,7 @@ extern.o: extern.cc | docker_image
 	$(chown) $@
 
 # special bootstrap for includer-hack (cannot use build-pint)
-includer-hack-dev.ll: includer-hack.pint | docker_image
+includer-hack-dev.ll: includer-hack.pint pint | docker_image
 	$(docker) ./pint < $<
 	$(chown) out.ll
 	mv out.ll $@
@@ -44,7 +56,7 @@ includer-hack-dev: includer-hack-dev.s | docker_image
 	$(chown) $@
 
 # special bootstrap for build-pint (cannot use build-pint)
-build-pint-dev.ll: build-pint.pint std.pint io.pint | docker_image
+build-pint-dev.ll: build-pint.pint std.pint io.pint $(bootstrapped) | docker_image
 	$(devify)
 	echo -n $(devified) | $(docker) ./includer-hack | $(docker) ./pint
 	$(undevify)
@@ -60,7 +72,7 @@ helloworld: helloworld.pint $(pint_deps) | docker_image
 	$(chown) $@
 
 # special bootstrap for pint (no linker support in build-pint)
-pint-dev.ll: pint.pint std.pint parser.pint io.pint | docker_image
+pint-dev.ll: pint.pint std.pint parser.pint io.pint $(bootstrapped) | docker_image
 	echo -n $< | $(docker) ./includer-hack | $(docker) ./pint
 	$(chown) out.ll
 	mv out.ll $@
@@ -81,4 +93,4 @@ clean:
 	rm -f extern.o helloworld{,.s,.ll} includer-hack-dev{,.s,.ll} pint-dev{,.s,.ll,-from-dev.ll} build-pint-dev{,.s,.ll}
 
 clean-bootstrap: clean
-	rm -f pint
+	rm -rf pint includer-hack bootstrap
