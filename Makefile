@@ -1,60 +1,99 @@
-SHELL = /bin/bash
-pint_deps = pint includer-hack build-pint
+pint_deps = pint-dev includer-hack-dev build-pint-dev
+
+docker_image = pint/build-env
+docker = sudo docker run --rm -i --mount type=bind,source="$(CURDIR)",target=/pint -w /pint --ulimit stack=-1 $(docker_image)
+chown = sudo chown $(shell id -u):$(shell id -g)
+
+ROOTDIR ?= $(CURDIR)
+export ROOTDIR
+
+define devified
+$(<:.pint=-dev.pint)
+endef
+define devify =
+sed -E 's/\.\/(includer-hack|pint)\b/&-dev/g' $< > $(devified)
+endef
+
+define undevify =
+rm -f $(devified)
+endef
+
+.PHONY: all bootstrap test clean clean-bootstrap docker_image test-self-hosting self
 
 all: pint-dev
 
-pint: bootstrap.sh
-	./bootstrap.sh
+# build-pint uses interpreter, so cannot be used from previous stage
 
-helloworld: helloworld.pint $(pint_deps)
-	echo -n helloworld | ./build-pint
+prev_step = bootstrap/step-3
+bootstrapped = pint includer-hack build-pint
 
-# special bootstrap for includer hack
-includer-hack.ll: pint includer-hack.pint
-	cat includer-hack.pint | ./pint
-	mv out.ll includer-hack.ll
+bootstrap: $(bootstrapped)
+$(bootstrapped):
+	rm -rf "$(ROOTDIR)/$(prev_step)"
+	git clone -s "$(ROOTDIR)" -b "$(shell git -C $(ROOTDIR) for-each-ref --count 1 --format '%(refname:short)' '**/$(prev_step)')" "$(ROOTDIR)/$(prev_step)"
+	$(MAKE) -C "$(ROOTDIR)/$(prev_step)" self
+	cp $(bootstrapped:%=$(ROOTDIR)/$(prev_step)/%) $(CURDIR)
 
-includer-hack.s: includer-hack.ll
-	llc includer-hack.ll
+docker_image:
+	sudo docker build -t $(docker_image) docker
 
-includer-hack: includer-hack.s
-	clang includer-hack.s -o includer-hack
+includer-hack-dev: includer-hack.pint $(bootstrapped) | docker_image
+	$(devify)
+	echo -n $@ | $(docker) ./build-pint
+	$(undevify)
+	$(chown) $@
 
-pint-dev.ll: pint pint.pint std.pint parser.pint io.pint includer-hack
-	echo -n pint.pint | ./includer-hack | ./pint
-	mv out.ll pint-dev.ll
+%.s: %.ll | docker_image
+	$(docker) llc -relocation-model=pic $<
+	$(chown) $@
 
-pint-dev.s: pint-dev.ll
-	llc pint-dev.ll
+build-pint-dev: build-pint.pint std.pint io.pint $(bootstrapped) | docker_image
+	$(devify)
+	echo -n $@ | $(docker) ./build-pint
+	$(undevify)
+	$(chown) $@
 
-pint-dev: pint-dev.s
-	clang++ pint-dev.s $(shell llvm-config --ldflags --system-libs --libs engine) -o pint-dev
+helloworld: helloworld.pint $(pint_deps) | docker_image
+	echo -n $@ | $(docker) ./build-pint-dev
+	$(chown) $@
 
-build-pint.ll: pint build-pint.pint includer-hack pint.pint std.pint io.pint
-	echo -n build-pint.pint | ./includer-hack | ./pint
-	mv out.ll build-pint.ll
+# special bootstrap for pint (no linker support in build-pint)
+pint-dev.ll: pint.pint std.pint parser.pint io.pint $(bootstrapped) | docker_image
+	echo -n $< | $(docker) ./includer-hack | $(docker) ./pint
+	$(chown) out.ll
+	mv out.ll $@
 
-build-pint.s: build-pint.ll
-	llc build-pint.ll
+# TODO cannot link static due to jit?
+pint-dev: pint-dev.s | docker_image
+	$(docker) clang++ $< $(shell llvm-config --ldflags --system-libs --libs engine) -o $@
+	$(chown) $@
 
-build-pint: build-pint.s
-	clang build-pint.s -o build-pint
+pint-from-dev.ll: pint.pint $(pint_deps) | docker_image
+	echo -n $< | $(docker) ./includer-hack-dev | $(docker) ./pint-dev
+	$(chown) out.ll
+	mv out.ll $@
 
-poc.ll: pint includer-hack poc.pint
-	echo -n poc.pint | ./includer-hack | ./pint
-	mv out.ll poc.ll
+test-self-hosting: pint-dev.ll pint-from-dev.ll
+	diff $+
 
-poc.s: poc.ll
-	llc poc.ll
+self: $(pint_deps) | docker_image
+	cp pint-dev pint # cannot use build-pint (see above)
+	echo -n includer-hack | $(docker) ./build-pint-dev
+	$(chown) includer-hack
+	echo -n build-pint | $(docker) ./build-pint-dev
+	$(chown) build-pint
 
-poc: poc.s
-	clang++ poc.s $(shell llvm-config --ldflags --system-libs --libs engine) -o poc
+poc.ll: poc.pint $(bootstrapped) | docker_image
+	echo -n $< | $(docker) ./includer-hack | $(docker) ./pint
+	$(chown) out.ll
+	mv out.ll $@
+
+poc: poc.s | docker_image
+	$(docker) clang++ $< $(shell llvm-config --link-static --ldflags --system-libs --libs engine) -o $@
+	$(chown) $@
 
 clean:
-	rm -f helloworld{,.s,.ll} includer-hack{,.s,.ll} pint-dev{,.s,.ll} build-pint{,.s,.ll} poc{,.s,.ll}
+	rm -f {poc,helloworld,pint-dev,includer-hack-dev,build-pint-dev}{,.s,.ll} pint-dev-from-dev.ll
 
 clean-bootstrap: clean
-	rm -f pint
-
-.PHONY: all clean clean-bootstrap
-
+	rm -rf pint includer-hack bootstrap

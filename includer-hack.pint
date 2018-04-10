@@ -1,3 +1,6 @@
+; very hacky: searches for '(''i''n''c''l''u''d''e'' ' and then for next ')'
+; the stuff in between is regarded to be a filename and its content inserted
+; be careful not to create a match accidentially!!!
 
 (def max-len (* 1024 (* 1024 1024)))
 
@@ -21,8 +24,9 @@
 
 (def transform (fn (source)
  (def file-name (fn (match)
-  ; ( to not confuse vim :>
-  (def end-of-form (c-call strstr * * match * ')'))
+  (def end-of-form (c-call strstr * * match *
+    ; ( to not confuse editors
+    ')'))
 
   (def prev (c-get char (c-array-addr char 0 end-of-form)))
   (c-set char (c-array-addr char 0 end-of-form) 0)
@@ -41,7 +45,7 @@
   (def len-p (c-call strlen uint * parent))
   (def len-i (c-call strlen uint * inner))
 
-  (def len (+ len-p len-i)) ; a little bit overkill, because (include ...) gets replaced
+  (def len (+ len-p len-i)) ; a little bit overkill, because [include ...] gets replaced
 
   (def target (c-array char len))
 
@@ -51,15 +55,25 @@
   (c-call strcat * * target * inner)
   (c-set char (c-array-addr char 0 match) prev)
 
-  ; ( to not confuse vim :>
-  (def rest (c-call strstr * * match * ')'))
+  (def rest (c-call strstr * * match *
+    ; ( to not confuse editors
+    ')'))
 
   (c-set char (c-array-addr char 0 rest) 10)
 
   (c-call strcat * * target * rest)))
 
+ (def pattern-c-str (c-array char 10))
+ (c-set char (c-array-addr char 0 pattern-c-str) 0)
+ (c-call strcat * * pattern-c-str *
+   '('
+    ; ) to not confuse editors
+ )
+ (c-call strcat * * pattern-c-str * 'include ')
+ (def pattern (c-str pattern-c-str))
+
  (def t^ (fn (source rec)
-  (def match (c-call strstr * * source * '(include ')) ;)
+  (def match (c-call strstr * * source * pattern))
 
   (if (p/ident c-nil match)
    source
