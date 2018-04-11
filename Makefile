@@ -30,7 +30,7 @@ bootstrapped = pint includer-hack build-pint
 bootstrap: $(bootstrapped)
 $(bootstrapped):
 	rm -rf "$(ROOTDIR)/$(prev_step)"
-	git clone -s "$(ROOTDIR)" -b "$(shell git -C $(ROOTDIR) for-each-ref --count 1 --format '%(refname:short)' '**/$(prev_step)')" "$(ROOTDIR)/$(prev_step)"
+	git -C "$(ROOTDIR)" archive "$(shell git -C $(ROOTDIR) for-each-ref --count 1 --format '%(refname:short)' '**/$(prev_step)')" --prefix "$(prev_step)/" | tar -C $(ROOTDIR) -x
 	$(MAKE) -C "$(ROOTDIR)/$(prev_step)" self
 	cp $(bootstrapped:%=$(ROOTDIR)/$(prev_step)/%) $(CURDIR)
 

@@ -7,3 +7,5 @@
 /build-pint*
 /poc*
 !*.pint
+
+/bootstrap/
