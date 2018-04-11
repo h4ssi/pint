@@ -6,3 +6,5 @@
 /includer-hack*
 /build-pint*
 !*.pint
+
+/bootstrap/
