@@ -67,6 +67,7 @@
 
  (t^ source t^)))
 
-(def filename (slurp-fp (c-get * (c-array-addr * 0 (c-val-ref stdin)))))
+(def arg-filename (head (tail args)))
+(def filename (if arg-filename arg-filename (slurp-fp (c-get * (c-array-addr * 0 (c-val-ref stdin))))))
 (prln (transform (slurp filename)))
 
