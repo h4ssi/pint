@@ -140,8 +140,11 @@
 
 (def void-type (c-call LLVMVoidTypeInContext * * c))
 
-(def main-f-type (c-call LLVMFunctionType * * i32-type * (c-ptr-array ()) int 0 int 0))
+(def args-pointer-type (c-call LLVMPointerType * * pointer-type int 0))
+(def main-f-type (c-call LLVMFunctionType * * i32-type * (c-ptr-array (cons i32-type (cons args-pointer-type ()))) int 2 int 0))
 (def main-f (c-call LLVMAddFunction * * m * 'main' * main-f-type))
+(def main-argc-reg (c-call LLVMGetParam * * main-f int 0))
+(def main-argv-reg (c-call LLVMGetParam * * main-f int 1))
 (def main-bb (c-call LLVMAppendBasicBlockInContext * * c * main-f * 'entry'))
 (def main-b (c-call LLVMCreateBuilder *))
 (c-call LLVMPositionBuilderAtEnd void * main-b * main-bb)
@@ -1419,7 +1422,10 @@
     (def s-symbol-name
      (built-in-fn s-symbol (quote symbol-name) 1 (direct-change-type-body symbol-type-index string-type-index)))
 
-    (def s s-symbol-name)
+    (def main-argc-val (build-val number-type-index (c-call LLVMBuildSIToFP * * main-b * main-argc-reg * double-type * 'main-argc-as-dbl')))
+    (def s-argc (state-add-local s-symbol-name (symbol 'argc') main-argc-val))
+
+    (def s s-argc)
 
     (def tr^ (fn (c state rec)
       (if (empty? c)
