@@ -19,25 +19,27 @@
  (c-call puts int * cmd)
  (c-call system int * cmd)))
 
+(def sh-quote (fn (s) (join '\'' (join s '\''))))
+
 (def tmp-pint (c-call strdup * * (c-call tmpnam * * nil)))
-(sys (join 'echo -n pint.pint | ./includer-hack > ' tmp-pint))
+(sys (join './includer-hack pint.pint > ' (sh-quote tmp-pint)))
 
 (def tmp-source (c-call strdup * * (c-call tmpnam * * nil)))
-(sys (join 'echo -n ' (join target-pint (join ' | ./includer-hack > ' tmp-source))))
+(sys (join './includer-hack ' (join (sh-quote target-pint) (join ' > ' (sh-quote tmp-source)))))
 
-(def h (sys (join './hello ' (join tmp-pint (join ' ' tmp-source)))))
+(def h (sys (join './hello ' (join (sh-quote tmp-pint) (join ' ' (sh-quote tmp-source))))))
 
 (c-call remove int * tmp-source)
 (c-call remove int * tmp-pint)
 
 (if (p/ident h 0)
  ((fn ()
-   (def m (sys (join 'mv out.ll ' target-ll)))
+   (def m (sys (join 'mv out.ll ' (sh-quote target-ll))))
    (if (p/ident m 0)
     ((fn ()
-      (def c (sys (join 'llc -relocation-model=pic ' target-ll)))
+      (def c (sys (join 'llc -relocation-model=pic ' (sh-quote target-ll))))
       (if (p/ident c 0)
-       (sys (join 'clang ' (join target-s (join ' -o ' target))))
+       (sys (join 'clang ' (join (sh-quote target-s) (join ' -o ' (sh-quote target)))))
        c)))
     m)))
  h)
