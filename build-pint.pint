@@ -10,7 +10,8 @@
  (c-call strcpy * * t * f)
  (c-call strcat * * t * s)))
 
-(def target (slurp-stdin))
+(def arg-target (i^th 1 args))
+(def target (if arg-target arg-target (slurp-stdin)))
 (def target-pint (join target '.pint'))
 (def target-ll (join target '.ll'))
 (def target-s (join target '.s'))
