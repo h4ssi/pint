@@ -100,8 +100,15 @@
 
 (include parser)
 
+(def args)
+(def input-file (i^th 1 args))
+
 (def INPUT)
-(def INPUT (if p/ident (slurp-stdin) INPUT))
+(def INPUT (if p/ident
+            (if (or (nil? input-file) (= '-' input-file))
+             (slurp-stdin)
+             (slurp input-file))
+            INPUT))
 
 (def code (parse INPUT))
 
@@ -1533,6 +1540,7 @@
            * 'exit-code-i32')
         * 'exit-code'))))
 
+
 (tr code)
 
 (def LLVMAbortProcessAction 0)
@@ -1550,6 +1558,7 @@
 (prln '')
 
 (c-call LLVMDumpModule void * m)
-(if (= 0 (c-call LLVMPrintModuleToFile int * m * 'out.ll' * (ref-ref err)))
+(def output-file (i^th 2 args))
+(if (= 0 (c-call LLVMPrintModuleToFile int * m * (or output-file 'out.ll') * (ref-ref err)))
     nil
     (prln (ref-deref err)))
