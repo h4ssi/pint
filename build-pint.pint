@@ -2,20 +2,12 @@
 (include std)
 (include io)
 
-(def join (fn (f s)
- (def len (+ 1 (+ (c-call strlen uint * f) (c-call strlen uint * s))))
-
- (def t (c-array char len))
-
- (c-call strcpy * * t * f)
- (c-call strcat * * t * s)))
-
 (def arg-self (i^th 0 args))
 (def arg-target (i^th 1 args))
 (def target (if arg-target arg-target (slurp-stdin)))
-(def target-pint (join target '.pint'))
-(def target-ll (join target '.ll'))
-(def target-s (join target '.s'))
+(def target-pint (str (cons target (cons '.pint' ()))))
+(def target-ll (str (cons target (cons '.ll' ()))))
+(def target-s (str (cons target (cons '.s' ()))))
 
 (def dirname (fn (path)
  (def duped-path (c-call strdup * * path))
@@ -23,10 +15,10 @@
 
  (def prefix (fn (from to)
   (c-set char (c-array-addr char 0 to) 0)
-  from))
+  (c-str from)))
  (if (= c-nil last-component)
   ''
-  (join (prefix duped-path last-component) '/'))))
+  (str (cons (prefix duped-path last-component) (cons '/' ()))))))
 
 (def pint-dirname
  (if arg-self
@@ -37,44 +29,40 @@
  (c-call puts int * cmd)
  (c-call system int * cmd)))
 
-(def sh-quote (fn (s) (join '\'' (join s '\''))))
-(def pathed (fn (s) (sh-quote (join pint-dirname s))))
+(def sh-quote (fn (s) (str (cons '\'' (cons s (cons '\'' ()))))))
+(def pathed (fn (s) (sh-quote (str (cons pint-dirname (cons s ()))))))
 
-(def tmp-pint (c-call strdup * * (c-call tmpnam * * nil)))
-(sys (join
-      (pathed 'includer-hack') (join
-      ' ' (join
-      (pathed 'pint.pint') (join
-      ' > '
-      (sh-quote tmp-pint))))))
+(def tmp-pint (c-str (c-call strdup * * (c-call tmpnam * * nil))))
+(sys (str (cons (pathed 'includer-hack') (cons
+                ' ' (cons
+                (pathed 'pint.pint') (cons
+                ' > ' (cons
+                (sh-quote tmp-pint) ())))))))
 
-(def tmp-source (c-call strdup * * (c-call tmpnam * * nil)))
-(sys (join
-      (pathed 'includer-hack') (join
-      ' ' (join
-      (sh-quote target-pint) (join
-      ' > '
-      (sh-quote tmp-source))))))
+(def tmp-source (c-str (c-call strdup * * (c-call tmpnam * * nil))))
+(sys (str (cons (pathed 'includer-hack') (cons
+                ' ' (cons
+                (sh-quote target-pint) (cons
+                ' > ' (cons
+                (sh-quote tmp-source) ())))))))
 
-(def h (sys (join
-             (pathed 'hello') (join
-             ' ' (join
-             (sh-quote tmp-pint) (join
-             ' '
-             (sh-quote tmp-source)))))))
+(def h (sys (str (cons (pathed 'hello') (cons
+                       ' ' (cons
+                       (sh-quote tmp-pint) (cons
+                       ' ' (cons
+                       (sh-quote tmp-source) ()))))))))
 
 (c-call remove int * tmp-source)
 (c-call remove int * tmp-pint)
 
 (if (p/ident h 0)
  ((fn ()
-   (def m (sys (join 'mv out.ll ' (sh-quote target-ll))))
+   (def m (sys (str (cons 'mv out.ll ' (cons (sh-quote target-ll) ())))))
    (if (p/ident m 0)
     ((fn ()
-      (def c (sys (join 'llc -relocation-model=pic ' (sh-quote target-ll))))
+      (def c (sys (str (cons 'llc -relocation-model=pic ' (cons (sh-quote target-ll) ())))))
       (if (p/ident c 0)
-       (sys (join 'clang ' (join (sh-quote target-s) (join ' -o ' (sh-quote target)))))
+       (sys (str (cons 'clang ' (cons (sh-quote target-s) (cons ' -o ' (cons (sh-quote target) ()))))))
        c)))
     m)))
  h)
-
