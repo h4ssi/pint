@@ -10,25 +10,58 @@
  (c-call strcpy * * t * f)
  (c-call strcat * * t * s)))
 
+(def arg-self (i^th 0 args))
 (def arg-target (i^th 1 args))
 (def target (if arg-target arg-target (slurp-stdin)))
 (def target-pint (join target '.pint'))
 (def target-ll (join target '.ll'))
 (def target-s (join target '.s'))
 
+(def dirname (fn (path)
+ (def duped-path (c-call strdup * * path))
+ (def last-component (c-call strrchr * * duped-path int 47)) ; 47 == /
+
+ (def prefix (fn (from to)
+  (c-set char (c-array-addr char 0 to) 0)
+  from))
+ (if (= c-nil last-component)
+  ''
+  (join (prefix duped-path last-component) '/'))))
+
+(def pint-dirname
+ (if arg-self
+  (dirname arg-self)
+  ''))
+
 (def sys (fn (cmd)
  (c-call puts int * cmd)
  (c-call system int * cmd)))
 
 (def sh-quote (fn (s) (join '\'' (join s '\''))))
+(def pathed (fn (s) (sh-quote (join pint-dirname s))))
 
 (def tmp-pint (c-call strdup * * (c-call tmpnam * * nil)))
-(sys (join './includer-hack pint.pint > ' (sh-quote tmp-pint)))
+(sys (join
+      (pathed 'includer-hack') (join
+      ' ' (join
+      (pathed 'pint.pint') (join
+      ' > '
+      (sh-quote tmp-pint))))))
 
 (def tmp-source (c-call strdup * * (c-call tmpnam * * nil)))
-(sys (join './includer-hack ' (join (sh-quote target-pint) (join ' > ' (sh-quote tmp-source)))))
+(sys (join
+      (pathed 'includer-hack') (join
+      ' ' (join
+      (sh-quote target-pint) (join
+      ' > '
+      (sh-quote tmp-source))))))
 
-(def h (sys (join './hello ' (join (sh-quote tmp-pint) (join ' ' (sh-quote tmp-source))))))
+(def h (sys (join
+             (pathed 'hello') (join
+             ' ' (join
+             (sh-quote tmp-pint) (join
+             ' '
+             (sh-quote tmp-source)))))))
 
 (c-call remove int * tmp-source)
 (c-call remove int * tmp-pint)
