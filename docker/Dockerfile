@@ -1,4 +1,9 @@
 
-FROM ubuntu:devel
-RUN apt-get update && apt-get install -y llvm-dev clang libffi-dev zlib1g-dev
+FROM ubuntu:cosmic
+RUN apt-get update && apt-get install -y \
+  clang \
+  libffi-dev \
+  llvm-dev \
+  pkgconf \
+  zlib1g-dev
 WORKDIR /pint

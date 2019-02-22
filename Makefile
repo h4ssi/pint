@@ -12,19 +12,19 @@ docker_image:
 	sudo docker build -t $(docker_image) docker
 
 hello.o: hello.cc | docker_image
-	$(docker) clang++ -std=c++14 -c $< $(shell pkg-config libffi --cflags)
+	$(docker) clang++ -std=c++14 -c $< $(shell $(docker) pkg-config libffi --cflags)
 	$(chown) $@
 
 extern.o: extern.cc | docker_image
-	$(docker) clang++ -std=c++14 -c $< $(shell llvm-config --cxxflags)
+	$(docker) clang++ -std=c++14 -c $< $(shell $(docker) llvm-config --cxxflags)
 	$(chown) $@
 
 hello: hello.o extern.o | docker_image
-	$(docker) clang++ -rdynamic $(shell llvm-config --ldflags) -Wl,--whole-archive -ldl $(shell pkg-config libffi --libs) $(shell llvm-config --system-libs --libs engine) -Wl,--no-whole-archive $+ -o $@
+	$(docker) clang++ -rdynamic $(shell $(docker) llvm-config --ldflags) -Wl,--whole-archive -ldl $(shell $(docker) pkg-config libffi --libs) $(shell $(docker) llvm-config --system-libs --libs engine) -Wl,--no-whole-archive $+ -o $@
 	$(chown) $@
 
 llvm-c-poc: llvm-c-poc.c | docker_image
-	$(docker) clang++ $< $(shell llvm-config --cflags --ldflags --system-libs --libs engine) -o $@
+	$(docker) clang++ $< $(shell $(docker) llvm-config --cflags --ldflags --system-libs --libs engine) -o $@
 	$(chown) $@
 
 # special bootstrap for includer-hack (cannot use includer-hack)
@@ -66,7 +66,7 @@ pint.ll: hello pint.pint std.pint parser.pint io.pint includer-hack | docker_ima
 	mv out.ll $@
 
 pint: pint.s extern.o | docker_image
-	$(docker) clang++ $+ $(shell llvm-config --link-static --ldflags --system-libs --libs engine) -o $@
+	$(docker) clang++ $+ $(shell $(docker) llvm-config --link-static --ldflags --system-libs --libs engine) -o $@
 	$(chown) $@
 
 pint-from-compiler.ll: pint pint.pint std.pint parser.pint io.pint includer-hack | docker_image
