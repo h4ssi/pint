@@ -100,8 +100,15 @@
 
 (include parser)
 
+(def args)
+(def input-file (i^th 1 args))
+
 (def INPUT)
-(def INPUT (if p/ident (slurp-stdin) INPUT))
+(def INPUT (if p/ident
+            (if (or (nil? input-file) (= '-' input-file))
+             (slurp-stdin)
+             (slurp input-file))
+            INPUT))
 
 (def code (parse INPUT))
 
@@ -140,7 +147,8 @@
 
 (def void-type (c-call LLVMVoidTypeInContext * * c))
 
-(def main-f-type (c-call LLVMFunctionType * * i32-type * (c-ptr-array ()) int 0 int 0))
+(def args-pointer-type (c-call LLVMPointerType * * pointer-type int 0))
+(def main-f-type (c-call LLVMFunctionType * * i32-type * (c-ptr-array (cons i32-type (cons args-pointer-type ()))) int 2 int 0))
 (def main-f (c-call LLVMAddFunction * * m * 'main' * main-f-type))
 (def main-bb (c-call LLVMAppendBasicBlockInContext * * c * main-f * 'entry'))
 (def main-b (c-call LLVMCreateBuilder *))
@@ -247,6 +255,7 @@
 
 (def i32-const (fn (i) (c-call LLVMConstInt * * i32-type int i int 1)))
 (def i64-const (fn (i) (c-call LLVMConstInt * * i64-type int i int 1)))
+(def i64-const-null (c-call LLVMConstNull * * i64-type))
 
 (def nil-type-index (i64-const 0)) ; type 0 = nil
 (def number-type-index (i64-const 1)) ; type 1 = number
@@ -317,7 +326,7 @@
     * value-type
     * (c-ptr-array
         (cons nil-type-index
-        (cons (c-call LLVMConstNull * * i64-type) ())))
+        (cons i64-const-null ())))
     int 2))))
 
 (def tr-number (fn (number state)
@@ -362,15 +371,17 @@
                * 'ptr to int') ())))
     int 2))))
 
+(def const-empty-list
+ (c-call LLVMConstNamedStruct *
+  * value-type
+  * (c-ptr-array
+     (cons list-type-index
+     (cons i64-const-null ())))
+  int 2))
+
 (def tr-empty-list
  (fn (state)
-  (state-set-cur-value state
-   (c-call LLVMConstNamedStruct *
-    * value-type
-    * (c-ptr-array
-       (cons list-type-index
-       (cons (c-call LLVMConstNull * * i64-type) ())))
-    int 2))))
+  (state-set-cur-value state const-empty-list)))
 
 (def tr-load-from-borrow
  (fn (sym state)
@@ -559,6 +570,7 @@
 
   (def phi (c-call LLVMBuildPhi * * main-b * (tr-c-type type) * 'c-value'))
 
+  ; todo: call once for each incoming edge and move to according branch
   (c-call LLVMAddIncoming void
    * phi
    * (c-ptr-array
@@ -1419,7 +1431,78 @@
     (def s-symbol-name
      (built-in-fn s-symbol (quote symbol-name) 1 (direct-change-type-body symbol-type-index string-type-index)))
 
-    (def s s-symbol-name)
+    (def setup-args-list (fn (state)
+     (def bb (c-call LLVMGetInsertBlock * * main-b))
+     (def f (c-call LLVMGetBasicBlockParent * * bb))
+     (def main-argc-reg (c-call LLVMGetParam * * f int 0))
+     (def main-argv-reg (c-call LLVMGetParam * * f int 1))
+
+     (def args-list-test-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'args-list-test'))
+     (def args-list-item-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'args-list-item'))
+     (def args-list-done-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'args-list-done'))
+     (c-call LLVMBuildBr * * main-b * args-list-test-bb)
+
+     (c-call LLVMPositionBuilderAtEnd void * main-b * args-list-test-bb)
+     (def i (c-call LLVMBuildPhi * * main-b * i32-type * 'args-list-i'))
+     (def args-list (c-call LLVMBuildPhi * * main-b * value-type * 'args-list'))
+     (c-call LLVMAddIncoming void
+      * i
+      * (c-ptr-array (cons main-argc-reg ()))
+      * (c-ptr-array (cons bb ()))
+      int 1)
+     (c-call LLVMAddIncoming void
+      * args-list
+      * (c-ptr-array (cons const-empty-list ()))
+      * (c-ptr-array (cons bb ()))
+      int 1)
+     (def switch (c-call LLVMBuildSwitch * * main-b * i * args-list-item-bb int 1))
+     (c-call LLVMAddCase void * switch * (i32-const 0) * args-list-done-bb)
+
+     (c-call LLVMPositionBuilderAtEnd void * main-b * args-list-item-bb)
+     (def decr-i (c-call LLVMBuildSub * * main-b * i * (i32-const 1) * 'decr-i'))
+     (def arg-ptr-ptr (c-call LLVMBuildGEP *
+                       * main-b
+                       * main-argv-reg
+                       * (c-ptr-array (cons decr-i ()))
+                       int 1
+                       * 'arg-ptr-ptr'))
+     (def arg-ptr (c-call LLVMBuildLoad * * main-b * arg-ptr-ptr * 'arg-ptr'))
+     (def arg (build-val string-type-index (c-call LLVMBuildPtrToInt *
+                                            * main-b
+                                            * arg-ptr
+                                            * i64-type
+                                            * 'arg-ptr-cast-to-int')))
+     (def list-elem-mem (c-call LLVMBuildAlloca * * main-b * list-elem-type * 'args-list-elem'))
+     (c-call LLVMBuildStore *
+      * main-b
+      * arg
+      * (gep-list-elem-val list-elem-mem 'list-elem-val-ptr'))
+     (c-call LLVMBuildStore *
+      * main-b
+      * (extract-pointer args-list pointer-type 'ptr-to-prev-head')
+      * (gep-list-elem-next list-elem-mem 'list-elem-next-ptr'))
+     (def new-args-list (build-val list-type-index (c-call LLVMBuildPtrToInt *
+                                                    * main-b
+                                                    * list-elem-mem
+                                                    * i64-type
+                                                    * 'cast-to-int')))
+     (c-call LLVMBuildBr * * main-b * args-list-test-bb)
+     (c-call LLVMAddIncoming void
+      * i
+      * (c-ptr-array (cons decr-i ()))
+      * (c-ptr-array (cons args-list-item-bb ()))
+      int 1)
+     (c-call LLVMAddIncoming void
+      * args-list
+      * (c-ptr-array (cons new-args-list ()))
+      * (c-ptr-array (cons args-list-item-bb ()))
+      int 1)
+
+     (c-call LLVMPositionBuilderAtEnd void * main-b * args-list-done-bb)
+
+     (state-add-local state (symbol 'args') args-list)))
+
+    (def s (setup-args-list s-symbol-name))
 
     (def tr^ (fn (c state rec)
       (if (empty? c)
@@ -1457,6 +1540,7 @@
            * 'exit-code-i32')
         * 'exit-code'))))
 
+
 (tr code)
 
 (def LLVMAbortProcessAction 0)
@@ -1474,6 +1558,7 @@
 (prln '')
 
 (c-call LLVMDumpModule void * m)
-(if (= 0 (c-call LLVMPrintModuleToFile int * m * 'out.ll' * (ref-ref err)))
+(def output-file (i^th 2 args))
+(if (= 0 (c-call LLVMPrintModuleToFile int * m * (or output-file 'out.ll') * (ref-ref err)))
     nil
     (prln (ref-deref err)))

@@ -259,6 +259,10 @@
   (unpair (split count list)
    (fn (h t) t))))
 
+(def i^th
+ (fn (index list)
+  (head (drop index list))))
+
 (def chunk
  (fn (chunk-size list)
   (def chunk^
