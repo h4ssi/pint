@@ -1,8 +1,7 @@
 pint_deps = pint-dev includer-hack-dev build-pint-dev
 
 docker_image = pint/build-env
-docker = sudo docker run --rm -i --mount type=bind,source="$(CURDIR)",target=/pint -w /pint --ulimit stack=-1 $(docker_image)
-chown = sudo chown $(shell id -u):$(shell id -g)
+docker = sudo docker run --rm -i --mount type=bind,source="$(CURDIR)",target=/pint -u $(shell id -u):$(shell id -g) --ulimit stack=-1 $(docker_image)
 
 ROOTDIR ?= $(CURDIR)
 export ROOTDIR
@@ -11,7 +10,7 @@ define devified
 $(<:.pint=-dev.pint)
 endef
 define devify =
-sed -E 's/\.\/(includer-hack|pint)\b/&-dev/g' $< > $(devified)
+sed -E "s/\\(pathed '(includer-hack|pint)'\\)/(pathed '\1-dev')/g" $< > $(devified)
 endef
 
 define undevify =
@@ -41,35 +40,28 @@ includer-hack-dev: includer-hack.pint $(bootstrapped) | docker_image
 	$(devify)
 	echo -n $@ | $(docker) ./build-pint
 	$(undevify)
-	$(chown) $@
 
 %.s: %.ll | docker_image
 	$(docker) llc -relocation-model=pic $<
-	$(chown) $@
 
 build-pint-dev: build-pint.pint std.pint io.pint $(bootstrapped) | docker_image
 	$(devify)
 	echo -n $@ | $(docker) ./build-pint
 	$(undevify)
-	$(chown) $@
 
 helloworld: helloworld.pint $(pint_deps) | docker_image
 	echo -n $@ | $(docker) ./build-pint-dev
-	$(chown) $@
 
 # special bootstrap for pint (no linker support in build-pint)
 pint-dev.ll: pint.pint std.pint parser.pint io.pint $(bootstrapped) | docker_image
 	echo -n $< | $(docker) ./includer-hack | $(docker) ./pint
-	$(chown) out.ll
 	mv out.ll $@
 
 pint-dev: pint-dev.s | docker_image
-	$(docker) clang++ $< $(shell llvm-config --link-static --ldflags --system-libs --libs engine) -o $@
-	$(chown) $@
+	$(docker) clang++ $< $(shell $(docker) llvm-config --link-static --ldflags --system-libs --libs engine) -o $@
 
 pint-from-dev.ll: pint.pint $(pint_deps) | docker_image
 	echo -n $< | $(docker) ./includer-hack-dev | $(docker) ./pint-dev
-	$(chown) out.ll
 	mv out.ll $@
 
 test-self-hosting: pint-dev.ll pint-from-dev.ll
@@ -78,18 +70,14 @@ test-self-hosting: pint-dev.ll pint-from-dev.ll
 self: $(pint_deps) | docker_image
 	cp pint-dev pint # cannot use build-pint (see above)
 	echo -n includer-hack | $(docker) ./build-pint-dev
-	$(chown) includer-hack
 	echo -n build-pint | $(docker) ./build-pint-dev
-	$(chown) build-pint
 
 poc.ll: poc.pint $(bootstrapped) | docker_image
 	echo -n $< | $(docker) ./includer-hack | $(docker) ./pint
-	$(chown) out.ll
 	mv out.ll $@
 
 poc: poc.s | docker_image
-	$(docker) clang++ $< $(shell llvm-config --link-static --ldflags --system-libs --libs engine) -o $@
-	$(chown) $@
+	$(docker) clang++ $< $(shell $(docker) llvm-config --link-static --ldflags --system-libs --libs engine) -o $@
 
 clean:
 	rm -f {poc,helloworld,pint-dev,includer-hack-dev,build-pint-dev}{,.s,.ll} pint-dev-from-dev.ll
