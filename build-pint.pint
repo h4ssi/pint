@@ -5,26 +5,49 @@
 (def dynamic (fn (x) x)) ; hack to keep old parser able to compile itself ; todo remove once macros are fully implemented
 
 (dynamic (do
- (def target (slurp-stdin))
+ (def arg-self (i^th 0 args))
+ (def arg-target (i^th 1 args))
+ (def target (if arg-target arg-target (slurp-stdin)))
  (def target-pint (str (cons target (cons '.pint' ()))))
  (def target-ll (str (cons target (cons '.ll' ()))))
  (def target-s (str (cons target (cons '.s' ()))))
+
+ (def dirname (fn (path)
+  (def duped-path (c-call strdup * * path))
+  (def last-component (c-call strrchr * * duped-path int 47)) ; 47 == /
+
+  (def prefix (fn (from to)
+   (c-set char (c-array-addr char 0 to) 0)
+   (c-str from)))
+  (if (= c-nil last-component)
+   ''
+   (str (cons (prefix duped-path last-component) (cons '/' ()))))))
+
+ (def pint-dirname
+  (if arg-self
+   (dirname arg-self)
+   ''))
 
  (def sys (fn (cmd)
   (c-call puts int * cmd)
   (c-call system int * cmd)))
 
- (def h (sys (str (cons 'echo -n ' (cons target-pint (cons ' | ./includer-hack | ./pint' ()))))))
+ (def sh-quote (fn (s) (str (cons '\'' (cons s (cons '\'' ()))))))
+ (def pathed (fn (s) (sh-quote (str (cons pint-dirname (cons s ()))))))
+
+ (def h (sys (str (cons (pathed 'includer-hack') (cons
+                        ' ' (cons
+                        (sh-quote target-pint) (cons
+                        ' | ' (cons
+                        (pathed 'pint') (cons
+                        ' - ' (cons
+                        (sh-quote target-ll) ()))))))))))
 
  (if (p/ident h 0)
   (do
-   (def m (sys (str (cons 'mv out.ll ' (cons target-ll ())))))
-   (if (p/ident m 0)
-    (do
-     (def c (sys (str (cons 'llc -relocation-model=pic ' (cons target-ll ())))))
-     (if (p/ident c 0)
-      (sys (str (cons 'clang ' (cons target-s (cons ' -o ' (cons target ()))))))
-      c))
-    m))
+   (def c (sys (str (cons 'llc ' (cons (sh-quote target-ll) ())))))
+   (if (p/ident c 0)
+    (sys (str (cons 'clang ' (cons (sh-quote target-s) (cons ' -o ' (cons (sh-quote target) ()))))))
+    c))
   h)))
 

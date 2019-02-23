@@ -84,6 +84,7 @@
 (def dynamic (fn (x) x)) ; hack to keep old parser able to compile itself ; todo remove once macros are fully implemented
 
 (dynamic (do
- (def filename (slurp-fp (c-get * (c-array-addr * 0 (c-val-ref stdin)))))
+ (def arg-filename (head (tail args)))
+ (def filename (if arg-filename arg-filename (slurp-fp (c-get * (c-array-addr * 0 (c-val-ref stdin))))))
  (prln (transform (slurp filename)))))
 

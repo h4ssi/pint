@@ -76,9 +76,19 @@
 
 (def main-b (c-call LLVMCreateBuilder *))
 
-(def create-module (fn (ret-type name)
-  (def main-f-type (c-call LLVMFunctionType * * ret-type * (c-ptr-array ()) int 0 int 0))
-  (def m (c-call LLVMModuleCreateWithNameInContext * * name * c))
+(def create-module (fn (name)
+  (c-call LLVMModuleCreateWithNameInContext * * name * c)))
+
+(def create-executable-module (fn (name jitted?)
+  (def args-pointer-type (c-call LLVMPointerType * * pointer-type int 0))
+  (def main-f-type (c-call LLVMFunctionType *
+                    * (if jitted? value-type i32-type)
+                    * (c-ptr-array (if jitted?
+                                    (cons value-type ())
+                                    (cons i32-type (cons args-pointer-type ()))))
+                    int (if jitted? 1 2)
+                    int 0))
+  (def m (create-module name))
   (def main-f (c-call LLVMAddFunction * * m * name * main-f-type))
   (c-call LLVMAppendBasicBlockInContext * * c * main-f * 'entry')))
 
@@ -136,7 +146,6 @@
                              (state-make cv bb pt ba st bs gl)))))
 
 (def state-fn (fn (s) (c-call LLVMGetBasicBlockParent * * (state-bb s))))
-(def state-module (fn (s) (c-call LLVMGetGlobalParent * * (state-fn s))))
 
 (def state-get-global (fn (s key) (state-unmake s (fn (cv bb pt ba st bs gl) (getk gl key)))))
 (def state-add-global (fn (s key val) (state-unmake s (fn (cv bb pt ba st bs gl)
@@ -147,6 +156,15 @@
                                      (state-make cv bb pt ba (assoc st key val) bs gl)))))
 (def state-clear-locals (fn (s) (state-unmake s (fn (cv bb pt ba st bs gl)
                                 (state-make cv bb pt ba () bs gl)))))
+
+(def state-set-module-index (fn (s i) (state-add-global s ';module-index' i)))
+(def state-get-module-index (fn (s) (state-get-global s ';module-index')))
+(def state-set-module-explicitly (fn (s m) (state-add-global s ';module' m)))
+(def state-module (fn (s)
+ (def explicit-m (state-get-global s ';module'))
+ (if explicit-m
+  explicit-m
+  (c-call LLVMGetGlobalParent * * (state-fn s)))))
 
 (def state-borrow (fn (s sym)
  (def sb^ (fn (c rec)
@@ -186,6 +204,7 @@
 
 (def i32-const (fn (i) (c-call LLVMConstInt * * i32-type int i int 1)))
 (def i64-const (fn (i) (c-call LLVMConstInt * * i64-type int i int 1)))
+(def i64-const-null (c-call LLVMConstNull * * i64-type))
 
 (def nil-type-index (i64-const 0)) ; type 0 = nil
 (def number-type-index (i64-const 1)) ; type 1 = number
@@ -255,7 +274,7 @@
     * value-type
     * (c-ptr-array
         (cons nil-type-index
-        (cons (c-call LLVMConstNull * * i64-type) ())))
+        (cons i64-const-null ())))
     int 2))
 
 (def tr-nil (fn (state) (state-set-cur-value state const-nil)))
@@ -302,15 +321,17 @@
                * 'ptr to int') ())))
     int 2))))
 
-(def tr-empty-list
- (fn (state)
-  (state-set-cur-value state
+(def const-empty-list
    (c-call LLVMConstNamedStruct *
     * value-type
     * (c-ptr-array
        (cons list-type-index
-       (cons (c-call LLVMConstNull * * i64-type) ())))
-    int 2))))
+       (cons i64-const-null ())))
+    int 2))
+
+(def tr-empty-list
+ (fn (state)
+  (state-set-cur-value state const-empty-list)))
 
 ; LLVMTypeKind
 (def LLVMVoidTypeKind 0) ; type with no size
@@ -466,6 +487,7 @@
 
     (def phi (c-call LLVMBuildPhi * * main-b * (tr-c-type type) * 'c-value'))
 
+    ; todo: call once for each incoming edge and move to according branch
     (c-call LLVMAddIncoming void
      * phi
      * (c-ptr-array
@@ -984,10 +1006,9 @@
    (fn (state name num-args body)
     (def llvm-name (str (cons ';built-in-' (cons (symbol-name name) ()))))
     (def f (fst (gen-fn (state-module state) num-args (fn (frame args bb) (body args)))))
-    (def f-val-glb (gen-fn-frame-global state llvm-name f ())) ; todo builtins as globals, they are loaded on the heap, which is not strictly necessary
+    (def f-val-glb (gen-fn-frame-global state llvm-name f ()))
     (def glb (state-cur-value f-val-glb))
-    (def lcl (c-call LLVMBuildLoad * * main-b * glb * llvm-name))
-    (state-add-local (state-add-global-tagged state name val-tag glb) name lcl)))
+    (state-add-global-tagged state name val-tag glb)))
 
   (def s-cons
    (built-in-fn s-malloc (quote cons) 2 (fn (args) (unpair args (fn (e l)
@@ -1273,6 +1294,83 @@
 
   s-symbol-name))
 
+(def setup-args-list (fn (state)
+ (def bb (c-call LLVMGetInsertBlock * * main-b))
+ (def f (c-call LLVMGetBasicBlockParent * * bb))
+ (def main-argc-reg (c-call LLVMGetParam * * f int 0))
+ (def main-argv-reg (c-call LLVMGetParam * * f int 1))
+
+ (def args-list-test-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'args-list-test'))
+ (def args-list-item-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'args-list-item'))
+ (def args-list-done-bb (c-call LLVMAppendBasicBlockInContext * * c * f * 'args-list-done'))
+ (c-call LLVMBuildBr * * main-b * args-list-test-bb)
+
+ (c-call LLVMPositionBuilderAtEnd void * main-b * args-list-test-bb)
+ (def i (c-call LLVMBuildPhi * * main-b * i32-type * 'args-list-i'))
+ (def args-list (c-call LLVMBuildPhi * * main-b * value-type * 'args-list'))
+ (c-call LLVMAddIncoming void
+  * i
+  * (c-ptr-array (cons main-argc-reg ()))
+  * (c-ptr-array (cons bb ()))
+  int 1)
+ (c-call LLVMAddIncoming void
+  * args-list
+  * (c-ptr-array (cons const-empty-list ()))
+  * (c-ptr-array (cons bb ()))
+  int 1)
+ (def switch (c-call LLVMBuildSwitch * * main-b * i * args-list-item-bb int 1))
+ (c-call LLVMAddCase void * switch * (i32-const 0) * args-list-done-bb)
+
+ (c-call LLVMPositionBuilderAtEnd void * main-b * args-list-item-bb)
+ (def decr-i (c-call LLVMBuildSub * * main-b * i * (i32-const 1) * 'decr-i'))
+ (def arg-ptr-ptr (c-call LLVMBuildGEP *
+                   * main-b
+                   * main-argv-reg
+                   * (c-ptr-array (cons decr-i ()))
+                   int 1
+                   * 'arg-ptr-ptr'))
+ (def arg-ptr (c-call LLVMBuildLoad * * main-b * arg-ptr-ptr * 'arg-ptr'))
+ (def arg (build-val string-type-index (c-call LLVMBuildPtrToInt *
+                                        * main-b
+                                        * arg-ptr
+                                        * i64-type
+                                        * 'arg-ptr-cast-to-int')))
+ (def list-elem-mem (c-call LLVMBuildAlloca * * main-b * list-elem-type * 'args-list-elem'))
+ (c-call LLVMBuildStore *
+  * main-b
+  * arg
+  * (gep-list-elem-val list-elem-mem 'list-elem-val-ptr'))
+ (c-call LLVMBuildStore *
+  * main-b
+  * (extract-pointer args-list pointer-type 'ptr-to-prev-head')
+  * (gep-list-elem-next list-elem-mem 'list-elem-next-ptr'))
+ (def new-args-list (build-val list-type-index (c-call LLVMBuildPtrToInt *
+                                                * main-b
+                                                * list-elem-mem
+                                                * i64-type
+                                                * 'cast-to-int')))
+ (c-call LLVMBuildBr * * main-b * args-list-test-bb)
+ (c-call LLVMAddIncoming void
+  * i
+  * (c-ptr-array (cons decr-i ()))
+  * (c-ptr-array (cons args-list-item-bb ()))
+  int 1)
+ (c-call LLVMAddIncoming void
+  * args-list
+  * (c-ptr-array (cons new-args-list ()))
+  * (c-ptr-array (cons args-list-item-bb ()))
+  int 1)
+
+ (c-call LLVMPositionBuilderAtEnd void * main-b * args-list-done-bb)
+
+ (state-add-local state (symbol 'args') args-list)))
+
+(def take-args-list-param (fn (state)
+ (def bb (c-call LLVMGetInsertBlock * * main-b))
+ (def f (c-call LLVMGetBasicBlockParent * * bb))
+ (def args-reg (c-call LLVMGetParam * * f int 0))
+ (state-add-local state (symbol 'args') args-reg)))
+
 (def LLVMAbortProcessAction 0)
 (def LLVMPrintMessageAction 1)
 (def LLVMReturnStatusAction 2)
@@ -1290,11 +1388,7 @@
  (c-call LLVMPositionBuilderAtEnd void * main-b * prev)
  ret))
 
-(def jit (fn (state)
- (c-call LLVMBuildRet * * main-b * (state-cur-value state)) ; todo print it (re"P"l)
-
- (c-call LLVMAddModule void * (ref-deref ee) * (state-module state))
- 
+(def jit (fn (state and-then)
  (trace 'verifying code to be jitted...')
  (def err (ref-build))
  (if (not (= 0 (c-call LLVMVerifyModule int * (state-module state) int LLVMPrintMessageAction * (ref-ref err))))
@@ -1303,46 +1397,64 @@
    (c-call LLVMDumpModule void * (state-module state))
    (prln (c-str (ref-deref err))))
   (do
-   (trace 'verification succeeded. jitting code...')
-   (def main-fn (c-call LLVMGetPointerToGlobal * * (ref-deref ee) * (state-fn state))) ; this fn is deprecated for mcjit
-   (trace 'code jitted')
-   (def result (c-call * main-fn =))
-   (trace 'code executed')
-   (state-set-cur-value state result)))))
+   (trace 'verification succeeded.')
+   (trace 'tracking code...')
+   (c-call LLVMAddModule void * (ref-deref ee) * (state-module state))
+   (trace 'code tracked')
+   (and-then state)))))
+
+(def eval (fn (state)
+ (trace 'jitting fn...')
+ (def main-fn (c-call LLVMGetPointerToGlobal * * (ref-deref ee) * (state-fn state))) ; this fn is deprecated for mcjit
+ (trace 'fn jitted')
+ (def result (c-call * main-fn = = args))
+ (trace 'code executed')
+ (state-set-cur-value state result)))
 
 (def create-jit-module (fn (state)
- (def index (state-get-global state ';module'))
- (def bb (create-module value-type (str (cons ';module' (cons index ())))))
- (state-add-global (state-set-bb (state-clear-locals state) bb) ';module' (+ index 1))))
+ (def index (state-get-module-index state))
+ (def bb (create-executable-module (str (cons ';module' (cons index ()))) ''))
+ (state-set-module-index
+  (state-set-bb
+   (state-set-module-explicitly
+    (state-clear-locals state)
+    nil)
+   bb)
+  (+ index 1))))
 
 (def jit-and-eval (fn (state callback)
  (def state^ (create-jit-module state))
  (state-set-bb
   (with-jit-builder state^ (fn ()
-   (jit (callback state^))))
+   (def state^^ (callback (take-args-list-param state^)))
+   (c-call LLVMBuildRet * * main-b * (state-cur-value state^^))
+   (jit state^^ eval)))
   (state-bb state))))
 
 (def init-jit (fn ()
  (debug 'initializing jit...')
 
- (jit-and-eval (state-add-global (init-state nil) ';module' 0) (fn (state) ; todo model properly in state
-  (def state^ (tr-nil (built-ins state)))
- 
-  (c-call LLVMLinkInMCJIT void)
-  (c-call LLVMInitializeX86TargetInfo void) ; todo support multiple targets
-  (c-call LLVMInitializeX86Target void)
-  (c-call LLVMInitializeX86TargetMC void)
-  (c-call LLVMInitializeX86AsmPrinter void)
- 
-  (def err (ref-build))
- 
-  (if (not (= 0 (c-call LLVMCreateJITCompilerForModule int * (ref-ref ee) * (state-module state^) int 0 * (ref-ref err))))
+ (c-call LLVMLinkInMCJIT void)
+ (c-call LLVMInitializeX86TargetInfo void) ; todo support multiple targets
+ (c-call LLVMInitializeX86Target void)
+ (c-call LLVMInitializeX86TargetMC void)
+ (c-call LLVMInitializeX86AsmPrinter void)
+
+ (def jit-m (create-module 'jit-globals'))
+ (def err (ref-build))
+ (if (not (= 0 (c-call LLVMCreateJITCompilerForModule int * (ref-ref ee) * jit-m int 0 * (ref-ref err))))
    (prln (c-str (ref-deref err)))
    (do
     (debug 'jit initialized')
-    state^))))))
+    (trace 'setting up globals...')
+    (def state^ (jit (built-ins
+                      (state-set-module-index
+                       (state-set-module-explicitly
+                        (init-state nil) jit-m) 0)) (fn (s) s)))
+    (trace 'globals set up')
+    state^))))
 
-(def jitting? (fn (state) (state-get-global state ';module')))
+(def jitting? (fn (state) (state-get-module-index state)))
 
 (def tr-macro (fn (form state tr)
  (uncons (tail form) (fn (name code)
@@ -1628,10 +1740,10 @@
 
 (def tr
   (fn (code)
-    (def main-bb (create-module i32-type 'main'))
+    (def main-bb (create-executable-module 'main' nil))
     (c-call LLVMPositionBuilderAtEnd void * main-b * main-bb)
 
-    (def s (built-ins (init-state main-bb)))
+    (def s (setup-args-list (built-ins (init-state main-bb))))
     (def j (init-jit))
 
     (def tr-single (fn (h state rec)
@@ -1650,7 +1762,7 @@
       state
       (rec (tail c) (tr-single (head c) state rec) rec))))
 
-    (def tr-and-jit (fn (c states rec)
+    (def tr-and-jit (fn (c states rec) ; todo print it (re"P"l)
       (if (empty? c)
        states
        ((fn (h t) (unpair states (fn (s j)
@@ -1688,12 +1800,18 @@
 (dynamic (do
  (info 'reading input...')
 
- (def INPUT (slurp-stdin))
+ (def args)
+ (def input-file (i^th 1 args))
+
+ (def INPUT (if (or (nil? input-file) (= '-' input-file))
+             (slurp-stdin)
+             (slurp input-file)))
 
  (info 'input read')
  (info 'parsing code...')
 
  (def code (parse INPUT))
+
 
  (if (not code)
   (do
@@ -1725,7 +1843,8 @@
 
        (info 'writing out.ll...')
 
-       (if (not (= 0 (c-call LLVMPrintModuleToFile int * m * 'out.ll' * (ref-ref err))))
+       (def output-file (i^th 2 args))
+       (if (not (= 0 (c-call LLVMPrintModuleToFile int * m * (or output-file 'out.ll') * (ref-ref err))))
          (do
           (prln (ref-deref err))
           3)
