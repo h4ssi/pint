@@ -167,7 +167,7 @@
      (rec ba rec)))))))
 
  (state-unmake s (fn (cv bb pt ba st bs gl)
-  (if (in-list sym bs) ; already borrowed?
+  (if (contains? sym bs) ; already borrowed?
    s
    (if (or (sb^ ba sb^) (getk gl sym))
     (state-make cv bb pt ba st (reverse (cons sym (reverse bs))) gl)
