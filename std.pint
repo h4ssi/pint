@@ -169,9 +169,21 @@
              (cons (pair l-h r-h) (rec l-t r-t rec))))))))))
   (zip^ l r zip^)))
 
-(def in-list
-  (fn (e l)
-    (not (empty? (filter (fn (i) (= i e)) l)))))
+(def some? (fn (p l)
+ (def some?^ (fn (l rec)
+  (if (empty? l)
+   nil
+   (uncons l (fn (l-h l-t)
+    (if (p l-h)
+     l-h
+     (rec l-t rec)))))))
+ (some?^ l some?^)))
+
+(def negate (fn (p) (fn (x) (not (p x)))))
+
+(def all? (fn (p l) (not (some? (negate p) l))))
+
+(def contains? (fn (e l) (some? (fn (i) (= i e)) l)))
 
 (def indexof (fn (el li)
  (def indexof^ (fn (l i rec)
@@ -289,7 +301,7 @@
     (to-list^ 0 to-list^)))
 
 (def in-str
-  (fn (c string) (in-list c (to-list string))))
+  (fn (c string) (contains? c (to-list string))))
 
 (def str-length
   (fn (s) (list-length (to-list s))))
